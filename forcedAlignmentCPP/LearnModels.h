@@ -5,32 +5,16 @@
 #include "commonTypes.h"
 #include "LMParams.h"
 #include "query.h"
-
-/*
-each 'csv' file represents a matrix of size numOfCharacter x 6, and each row in the following format
-
-Threshold  Ascii_code X  Y W H
-
-(X, Y) is the top left coordinate of the character's bounding box
-W, H - are the width and height coordinates of the bounding box
-*/
-struct ModelInstance
-{
-	ModelInstance(const string &fileName, const string &csv_line);
-
-	string m_fileName;
-
-	uchar m_threshold;
-	uchar m_asciiCode;
-	Rect m_window;
-};
+#include "ModelInstance.h"
 
 class LearnModels
 {
 public:
-	LearnModels(const std::string& models_path = "", const std::string& images_path = "");
+	LearnModels();
 	void getDocs();
 	void getQueries();
+
+	void getModelInstances();
 
 	/* For debugging */
 	void train();
@@ -58,6 +42,7 @@ private:
 	unordered_map<uchar, vector<ModelInstance>> m_modelInstances;
 	unordered_map<uchar, Ptr<SVM>> m_SVMModels;
 	unordered_map<uchar, Size> m_WindowSz;
+	unordered_map<uchar, uint> m_classes;
 
 	LMParams m_params;
 };

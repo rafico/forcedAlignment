@@ -14,10 +14,65 @@ using namespace boost::filesystem;
 using namespace cv;
 using namespace std;
 
-LearnModels::LearnModels(const string& models_path, const string& images_path)
+LearnModels::LearnModels()
 {
-	auto models_directory = models_path.empty() ? "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/ground_truth/character_location" : models_path;
-	auto images_directory = images_path.empty() ? "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/data/page_images/" : images_path;
+	getQueries();
+}
+
+void LearnModels::getQueries()
+{
+	clog << "* Loading queries *" << endl;
+	// TODO: save computed queries in cache.
+	
+	clog << "* Computing queries *" << endl;
+	path queriesPath(m_params.m_pathQueries, native);
+	if (!exists(queriesPath))
+	{
+		cerr << "Error: Unable to read queries from " << m_params.m_pathQueries << endl;
+		return;
+	}
+	directory_iterator end_itr; // default construction yields past-the-end
+	for (directory_iterator itr(queriesPath); itr != end_itr; ++itr)
+	{
+		if (itr->path().extension() == ".gtp")
+		{
+			std::ifstream str(itr->path().string());
+			if (!str.good())
+			{
+				std::cerr << "Error: Unable to read queries from " << queriesPath << std::endl;
+			}
+
+			std::string	line;
+			while (std::getline(str, line))
+			{
+				m_queries.push_back(Query(m_params.m_pathImages, line));
+				Query& query = m_queries.back();
+				uint asciiCode = query.getText();
+				auto iter = m_classes.find(asciiCode);
+				if (iter != m_classes.end())
+				{
+					query.setClassNum(iter->second);
+				}
+				else
+				{
+					m_classes.insert({ asciiCode, uint(m_classes.size()) });
+					query.setClassNum(m_classes.size());
+				}
+			}
+		}
+	}
+}
+
+void LearnModels::getDocs()
+{
+	clog << "* Loading documents *" << endl;
+
+}
+
+void LearnModels::getModelInstances()
+{
+	auto models_directory = "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/ground_truth/character_location";
+	auto images_directory = "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/data/page_images/";
 
 	path dir_path(models_directory, native);
 	if (!exists(dir_path))
@@ -71,59 +126,10 @@ LearnModels::LearnModels(const string& models_path, const string& images_path)
 			}
 		}
 	}
-}
-
-void LearnModels::getQueries()
-{
-	clog << "* Loading queries *" << endl;
-	// TODO: save computed queries in cache.
-	
-	clog << "* Computing queries *" << endl;
-	path queriesPath(m_params.m_queriesDir, native);
-	if (!exists(queriesPath))
-	{
-		cerr << "Error: Unable to read queries from " << m_params.m_queriesDir << endl;
-		return;
-	}
-
 
 }
 
-void LearnModels::getDocs()
-{
-	clog << "* Loading documents *" << endl;
 
-}
-
-LearnModels::~LearnModels()
-{}
-
-
-/* Threshold  Ascii_code X  Y W H */
-ModelInstance::ModelInstance(const std::string &fileName, const std::string &csv_line)
-	: m_fileName(fileName)
-{
-	std::stringstream   lineStream(csv_line);
-	std::string         cell;
-
-	std::getline(lineStream, cell, ',');
-	m_threshold = std::stoi(cell);
-
-	std::getline(lineStream, cell, ',');
-	m_asciiCode = std::stoi(cell);
-
-	std::getline(lineStream, cell, ',');
-	m_window.x = std::stoi(cell);
-
-	std::getline(lineStream, cell, ',');
-	m_window.y = std::stoi(cell);
-
-	std::getline(lineStream, cell, ',');
-	m_window.width = std::stoi(cell) + 1;
-
-	std::getline(lineStream, cell, ',');
-	m_window.height = std::stoi(cell) + 1;
-}
 
 void LearnModels::samplePos(Mat & posLst, const cv::Size & size, const vector<ModelInstance>& miVec)
 {
@@ -423,3 +429,6 @@ cv::Size LearnModels::getHOGWindowSz(uchar asciiCode)
 	cv::Size sz = m_WindowSz.at(asciiCode);
 	return Size(sz.width / m_params.m_sbin, sz.height / m_params.m_sbin);
 };
+
+LearnModels::~LearnModels()
+{}
