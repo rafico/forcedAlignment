@@ -1,4 +1,6 @@
 #ifndef _H_PEDRO_FEATURES_H__
+#define _H_PEDRO_FEATURES_H__
+
 #include <opencv2/core.hpp>
 
 class PedroFeatures

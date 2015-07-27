@@ -16,71 +16,20 @@ using namespace std;
 
 LearnModels::LearnModels()
 {
-	getQueries();
+	loadTrainingData();
 }
 
-void LearnModels::getQueries()
+
+void LearnModels::loadTrainingData()
 {
-	clog << "* Loading queries *" << endl;
-	// TODO: save computed queries in cache.
-	
-	clog << "* Computing queries *" << endl;
-	path queriesPath(m_params.m_pathQueries, native);
-	if (!exists(queriesPath))
-	{
-		cerr << "Error: Unable to read queries from " << m_params.m_pathQueries << endl;
-		return;
-	}
-	directory_iterator end_itr; // default construction yields past-the-end
-	for (directory_iterator itr(queriesPath); itr != end_itr; ++itr)
-	{
-		if (itr->path().extension() == ".gtp")
-		{
-			std::ifstream str(itr->path().string());
-			if (!str.good())
-			{
-				std::cerr << "Error: Unable to read queries from " << queriesPath << std::endl;
-			}
-
-			std::string	line;
-			while (std::getline(str, line))
-			{
-				m_queries.push_back(Query(m_params.m_pathImages, line));
-				Query& query = m_queries.back();
-				uint asciiCode = query.getText();
-				auto iter = m_classes.find(asciiCode);
-				if (iter != m_classes.end())
-				{
-					query.setClassNum(iter->second);
-				}
-				else
-				{
-					m_classes.insert({ asciiCode, uint(m_classes.size()) });
-					query.setClassNum(m_classes.size());
-				}
-			}
-		}
-	}
-}
-
-void LearnModels::getDocs()
-{
-	clog << "* Loading documents *" << endl;
-
-}
-
-void LearnModels::getModelInstances()
-{
-	auto models_directory = "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/ground_truth/character_location";
-	auto images_directory = "D:/Dropbox/Irina, Rafi and Yossi/datasets/saintgalldb-v1.0/data/page_images/";
-
-	path dir_path(models_directory, native);
+	path dir_path(m_params.m_pathDocuments, native);
 	if (!exists(dir_path))
 	{
-		std::cerr << "Error: Unable to read models from " << models_directory << std::endl;
+		cerr << "Error: Unable to read models from " << m_params.m_pathDocuments << std::endl;
 		return;
 	}
 
+	uint globalIdx=0;
 	directory_iterator end_itr; // default construction yields past-the-end
 	for (directory_iterator itr(dir_path); itr != end_itr; ++itr)
 	{
@@ -90,11 +39,11 @@ void LearnModels::getModelInstances()
 			std::ifstream str(itr->path().string());
 			if (!str.good())
 			{
-				std::cerr << "Error: Unable to read models from " << models_directory << std::endl;
+				std::cerr << "Error: Unable to read models from " << itr->path().string() << std::endl;
 			}
-
+			
 			string fileName = itr->path().filename().stem().string();
-			string fullFileName = images_directory + fileName + ".jpg";
+			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
 			cv::Mat image = cv::imread(fullFileName);
 
 			if (!image.data)
@@ -103,33 +52,39 @@ void LearnModels::getModelInstances()
 				return;
 			}
 
-			m_trainingImages.insert({ fileName, image });
-
+			vector<CharInstance> charsVec;
 			std::string	line;
 			while (std::getline(str, line))
 			{
-				ModelInstance mi(fileName, line);
-				if ('\0' == mi.m_asciiCode)
+				charsVec.push_back(CharInstance(fullFileName, globalIdx, line));
+				auto &ci = charsVec.back();
+				if ('\0' == ci.m_asciiCode)
 				{
+					charsVec.pop_back();
 					continue;
 				}
-				auto &mi_vec = m_modelInstances.find(mi.m_asciiCode);
-				if (mi_vec != m_modelInstances.end())
+				++globalIdx;
+
+				uint classNum;
+				auto iter = m_classes.find(ci.m_asciiCode);
+				if (iter != m_classes.end())
 				{
-					mi_vec->second.push_back(mi);
+					classNum = iter->second;
 				}
 				else
 				{
-					std::vector<ModelInstance> vec = { mi };
-					m_modelInstances.insert({ mi.m_asciiCode, vec });
+					classNum = uint(m_classes.size());
+					m_classes.insert({ ci.m_asciiCode, classNum });
 				}
+				ci.setClassNum(classNum);
+				++m_numRelevantWordsByClass[classNum];
 			}
+			m_docs.push_back(Doc(image, charsVec.size(), move(charsVec), image.rows, image.cols, fullFileName));
 		}
 	}
-
 }
 
-
+/*
 
 void LearnModels::samplePos(Mat & posLst, const cv::Size & size, const vector<ModelInstance>& miVec)
 {
@@ -138,10 +93,10 @@ void LearnModels::samplePos(Mat & posLst, const cv::Size & size, const vector<Mo
 
 	for (const auto& mi : miVec)
 	{
-		Mat image = m_trainingImages.at(mi.m_fileName);
+		Mat image = m_trainingImages.at(mi.m_pathIm);
 
 		// We expand the query to capture some context
-		Rect loc(mi.m_window.x - pxbin, mi.m_window.y - pxbin, mi.m_window.width + pxbin, mi.m_window.height + pxbin);
+		Rect loc(mi.m_loc.x - pxbin, mi.m_loc.y - pxbin, mi.m_loc.width + pxbin, mi.m_loc.height + pxbin);
 		uint newH = loc.height;
 		uint newW = loc.width;
 
@@ -192,8 +147,8 @@ void LearnModels::computeAverageWindowSize4Char()
 		double accWidth = 0;
 		for (const auto& instance : miVec)
 		{
-			accHeight += instance.m_window.height - 1;
-			accWidth += instance.m_window.width - 1;
+			accHeight += instance.m_loc.height - 1;
+			accWidth += instance.m_loc.width - 1;
 		}
 
 		uint avgWidth = static_cast<uint>(round((accWidth / miVec.size()) / m_params.m_sbin))*m_params.m_sbin;
@@ -202,7 +157,7 @@ void LearnModels::computeAverageWindowSize4Char()
 	}
 }
 
-/* currently implementing 1 vs all, need to try pairs*/
+// currently implementing 1 vs all, need to try pairs
 void LearnModels::train()
 {
 	Mat trainingNeg = imread("D:/Dropbox/Code/forcedAlignment/trainNeg.jpg");
@@ -285,13 +240,13 @@ void LearnModels::trainSvm(Ptr<ml::SVM> svm, const Mat& features, const vector<i
 		err += (labelSign != predictedSign);
 	}
 	clog << "Prediction on training set: " << 1- (err / labels.size()) << endl;
-	/*
-	Ptr<ml::TrainData> trainData = cv::ml::TrainData::create(features, ml::ROW_SAMPLE, Mat(labels));
-	std::clog << "Start training...";
-	svm->setKernel(ml::SVM::LINEAR);
-	svm->trainAuto(trainData);
-	std::clog << "...[done]" << endl;
-	*/
+	
+	//Ptr<ml::TrainData> trainData = cv::ml::TrainData::create(features, ml::ROW_SAMPLE, Mat(labels));
+	//std::clog << "Start training...";
+	//svm->setKernel(ml::SVM::LINEAR);
+	//svm->trainAuto(trainData);
+	//std::clog << "...[done]" << endl;
+
 
 	string fileName = m_params.m_svmModelsLocation + to_string(asciiCode) + ".yml";
 	svm->save(fileName);
@@ -341,10 +296,10 @@ void LearnModels::sampleNeg(uchar asciiCode, cv::Mat& features, size_t startPos,
 
 		for (const auto& mi : modelInstances.second)
 		{
-			Mat image = m_trainingImages.at(mi.m_fileName);
+			Mat image = m_trainingImages.at(mi.m_pathIm);
 
 			// We expand the query to capture some context
-			Rect loc(mi.m_window.x - m_params.m_sbin, mi.m_window.y - m_params.m_sbin, mi.m_window.width + m_params.m_sbin, mi.m_window.height + m_params.m_sbin);
+			Rect loc(mi.m_loc.x - m_params.m_sbin, mi.m_loc.y - m_params.m_sbin, mi.m_loc.width + m_params.m_sbin, mi.m_loc.height + m_params.m_sbin);
 			
 			uint newH = loc.height;
 			uint newW = loc.width;
@@ -429,6 +384,17 @@ cv::Size LearnModels::getHOGWindowSz(uchar asciiCode)
 	cv::Size sz = m_WindowSz.at(asciiCode);
 	return Size(sz.width / m_params.m_sbin, sz.height / m_params.m_sbin);
 };
+*/
 
-LearnModels::~LearnModels()
-{}
+/*
+auto &mi_vec = m_modelInstances.find(mi.m_asciiCode);
+if (mi_vec != m_modelInstances.end())
+{
+mi_vec->second.push_back(mi);
+}
+else
+{
+std::vector<ModelInstance> vec = { mi };
+m_modelInstances.insert({ mi.m_asciiCode, vec });
+}
+}*/
