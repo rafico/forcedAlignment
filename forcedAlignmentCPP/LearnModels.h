@@ -33,6 +33,7 @@ private:
 	//void trainSvm(Ptr<SVM>, const Mat & trainData, const vector<int> & labels, uchar asciiCode);
 
 	vector<uint> m_numRelevantWordsByClass;
+	vector<vector<Rect>> m_relevantBoxesByClass;
 	vector<Doc> m_docs;
 
 	// TODO: unite to a single map.

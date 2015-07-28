@@ -15,6 +15,7 @@ using namespace cv;
 using namespace std;
 
 LearnModels::LearnModels()
+	: m_numRelevantWordsByClass(UCHAR_MAX+1, 0)
 {
 	loadTrainingData();
 }
@@ -76,10 +77,27 @@ void LearnModels::loadTrainingData()
 					classNum = uint(m_classes.size());
 					m_classes.insert({ ci.m_asciiCode, classNum });
 				}
-				ci.setClassNum(classNum);
+				ci.m_classNum = classNum;
 				++m_numRelevantWordsByClass[classNum];
 			}
 			m_docs.push_back(Doc(image, charsVec.size(), move(charsVec), image.rows, image.cols, fullFileName));
+		}
+	}
+	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
+	size_t nonZeroCnt = distance(m_numRelevantWordsByClass.begin(), iter);
+	m_numRelevantWordsByClass.resize(nonZeroCnt);
+	
+	size_t numDocs = m_docs.size();
+	m_relevantBoxesByClass.resize(numDocs*nonZeroCnt);
+	for (int i = 0; i < numDocs; ++i)
+	{
+		const auto& chars = m_docs[i].m_chars;
+		for (const auto& ch : chars)
+		{
+			uint classNum = ch.m_classNum;
+			Rect loc = ch.m_loc;
+			size_t idx = i*nonZeroCnt + classNum;
+			m_relevantBoxesByClass[idx].push_back(loc);
 		}
 	}
 }

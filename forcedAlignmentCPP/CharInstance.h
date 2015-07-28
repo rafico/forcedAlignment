@@ -14,9 +14,6 @@ struct CharInstance
 {
 	CharInstance(const string &pathIm, uint globalIdx, const string &csv_line);
 
-	void setClassNum(uint classNum) { m_classNum = classNum; }
-	uint getClassNum() { return m_classNum; }
-
 	string m_pathIm;
 	uint m_globalIdx;
 
