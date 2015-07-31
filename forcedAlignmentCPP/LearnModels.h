@@ -9,12 +9,17 @@
 #include "LMParams.h"
 #include "CharInstance.h"
 #include "Doc.h"
+#include "HogSvmModel.h"
 
 class LearnModels
 {
 public:
 	LearnModels();
 	void loadTrainingData();
+	void computeFeaturesDocs();
+	void getImagesDocs();
+	void loadModels();
+	void learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel &hs_model);
 
 	/* For debugging */
 	void train();
@@ -25,11 +30,11 @@ public:
 	//Size getHOGWindowSz(uchar asciiCode); 
 
 private:
-	void drawLocations(Mat &img, const vector<Rect> &locations, const Scalar &color);
+	void NormalizeFeatures(Mat & features);
+	//void drawLocations(Mat &img, const vector<Rect> &locations, const Scalar &color);
 	//void samplePos(Mat & posLst, const Size & size, const vector<ModelInstance>& miVec);
 	//void sampleNeg(uchar asciiCode, cv::Mat& features, size_t startPos, const Mat & negHogFeatures, Size imageHogSz, Size modelHogSz, size_t numOfExamples);
 	//void computeAverageWindowSize4Char();
-	//void NormalizeFeatures(Mat & features);
 	//void trainSvm(Ptr<SVM>, const Mat & trainData, const vector<int> & labels, uchar asciiCode);
 
 	vector<uint> m_numRelevantWordsByClass;
@@ -37,7 +42,6 @@ private:
 	vector<Doc> m_docs;
 
 	// TODO: unite to a single map.
-	unordered_map<uchar, Ptr<SVM>> m_SVMModels;
 	unordered_map<uchar, Size> m_WindowSz;
 	unordered_map<uchar, uint> m_classes;
 

@@ -9,6 +9,7 @@
 #include <boost/system/config.hpp>
 #include "PedroFeatures.h"
 #include "LearnModels.h"
+#include "LibLinearWrapper.h"
 
 using namespace boost::filesystem;
 using namespace cv;
@@ -18,11 +19,17 @@ LearnModels::LearnModels()
 	: m_numRelevantWordsByClass(UCHAR_MAX+1, 0)
 {
 	loadTrainingData();
+	computeFeaturesDocs();
 }
 
 
 void LearnModels::loadTrainingData()
 {
+	clog << "* Loading queries *" << endl;
+	clog << "* Computing queries *" << endl;
+	clog << "* Loading documents *" << endl;
+	clog << "* Initializing test documents *" << endl;
+
 	path dir_path(m_params.m_pathDocuments, native);
 	if (!exists(dir_path))
 	{
@@ -87,9 +94,9 @@ void LearnModels::loadTrainingData()
 	size_t nonZeroCnt = distance(m_numRelevantWordsByClass.begin(), iter);
 	m_numRelevantWordsByClass.resize(nonZeroCnt);
 	
-	size_t numDocs = m_docs.size();
-	m_relevantBoxesByClass.resize(numDocs*nonZeroCnt);
-	for (int i = 0; i < numDocs; ++i)
+	m_params.m_numDocs = m_docs.size();
+	m_relevantBoxesByClass.resize(m_params.m_numDocs*nonZeroCnt);
+	for (int i = 0; i < m_params.m_numDocs; ++i)
 	{
 		const auto& chars = m_docs[i].m_chars;
 		for (const auto& ch : chars)
@@ -100,10 +107,188 @@ void LearnModels::loadTrainingData()
 			m_relevantBoxesByClass[idx].push_back(loc);
 		}
 	}
+	m_params.m_numNWords = ceil((double)m_params.m_numNWords / m_params.m_numDocs)*m_params.m_numDocs;
 }
 
-/*
+void LearnModels::getImagesDocs()
+{
+	clog << "* Getting images and resizing *" << endl;
+	for (auto& doc : m_docs)
+	{
+		uint H = doc.m_H;
+		uint W = doc.m_W;
+		uint res;
 
+		while (res = H % m_params.m_sbin)
+		{
+			H -= res;
+		}
+		while (res = W % m_params.m_sbin)
+		{
+			W -= res;
+		}
+		uint difH = doc.m_H - H;
+		uint difW = doc.m_W - W;
+		uint padYini = difH / 2;
+		uint padYend = difH - padYini;
+		uint padXini = difW / 2;
+		uint padXend = difW - padXini;
+		
+		const Mat &im = doc.m_origImage;
+		im(Range(padYini, im.rows - padYend), Range(padXini, im.cols - padXend)).copyTo(doc.m_image);
+		doc.yIni = padYini;
+		doc.xIni = padXini;
+		doc.m_H = doc.m_image.rows;
+		doc.m_W = doc.m_image.cols;
+	}
+}
+
+
+void LearnModels::computeFeaturesDocs()
+{
+	getImagesDocs();
+	for (size_t i = 0; i < m_docs.size(); ++i)
+	{
+		clog << "Computing features and labels of doc " << i << endl;
+		int bH, bW;
+		m_docs[i].m_features = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
+		m_docs[i].m_features.convertTo(m_docs[i].m_features, CV_32F);
+		m_docs[i].m_bH = bH;
+		m_docs[i].m_bW = bW;
+	}
+}
+
+void LearnModels::loadModels()
+{
+	size_t index = 1;
+	for (const auto& doc : m_docs)
+	{
+		for (const auto& query : doc.m_chars)
+		{
+			uint classNum = query.m_classNum;
+			uint nrelW = m_numRelevantWordsByClass[classNum];
+			clog << index++ << endl;
+			HogSvmModel hogSvmModel;
+			learnModel(doc, query, hogSvmModel);
+		}
+	}
+}
+
+void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel &hs_model)
+{
+	uint pxbin = m_params.m_sbin;
+
+	// We expand the query to capture some context
+	Rect loc(ci.m_loc.x - pxbin, ci.m_loc.y - pxbin, ci.m_loc.width + 2*pxbin, ci.m_loc.height + 2*pxbin);
+	uint modelNew_H = loc.height;
+	uint modelNew_W = loc.width;
+
+	uint res;
+	while (res = modelNew_H % pxbin)
+	{
+		modelNew_H -= res;
+		loc.height -= res;
+		loc.y += int(floor(double(res) / 2));
+	}
+	while (res = modelNew_W % pxbin)
+	{
+		modelNew_W -= res;
+		loc.width -= res;
+		loc.x += int(floor(double(res) / 2));
+	}
+
+	hs_model.m_newH = modelNew_H;
+	hs_model.m_newW = modelNew_W;
+	hs_model.m_bH = modelNew_H / m_params.m_sbin - 2;
+	hs_model.m_bW = modelNew_W / m_params.m_sbin - 2;
+	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
+
+	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_64F);
+
+	Mat imDoc = doc.m_origImage;
+	uint H = imDoc.rows;
+	uint W = imDoc.cols;
+
+	// Get positive windows
+	uint ps = 0;
+	for (auto dx = m_params.m_rangeX.start; dx < m_params.m_rangeX.end; dx += m_params.m_stepSize4PositiveExamples)	{
+		for (auto dy = m_params.m_rangeY.start; dy < m_params.m_rangeY.end; dy += m_params.m_stepSize4PositiveExamples)	{
+			// Extract image patch
+			auto x1 = max(loc.x + dx, 0);
+			auto x2 = min(loc.x + loc.width + dx, imDoc.cols - 1);
+			auto y1 = max(loc.y + dy, 0);
+			auto y2 = min(loc.y + loc.height + dy, imDoc.rows - 1);
+			Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
+
+			Mat posPatch;
+			if (im.rows != modelNew_H || im.cols != modelNew_W)
+			{
+				resize(im, posPatch, Size(modelNew_W, modelNew_H));
+			}
+			else
+			{
+				im.copyTo(posPatch);
+			}
+
+			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
+			//feat.convertTo(feat, CV_32F);
+			feat.reshape(1, 1).copyTo(trHOGs.row(ps++));
+		}
+	}
+	// Get negative windows
+	random_device rd;
+	mt19937 gen(rd());
+
+	int wordsByDoc = m_params.m_numNWords / m_params.m_numDocs;
+	uint startPos = m_params.m_numTrWords;
+	
+	for (uint id = 0; id < m_docs.size(); ++id)
+	{
+		Mat fD = m_docs[id].m_features;
+		uint BH = m_docs[id].m_bH;
+		uint BW = m_docs[id].m_bW;
+
+		for (size_t jj = 0; jj < wordsByDoc; ++jj)
+		{
+			// Pick a random starting cell
+			uniform_int_distribution<> byDis(0, BH - hs_model.m_bH - 1);
+			uniform_int_distribution<> bxDis(0, BW - hs_model.m_bW - 1);
+
+			uint hogDim = m_params.m_dim;
+			int by = byDis(gen);
+			int bx = bxDis(gen);
+			for (int tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
+			{
+				auto sp = tmpby*BW + bx;
+				Mat temp = fD(Range(sp, sp + hs_model.m_bW), Range::all()).reshape(1, 1);
+				Mat aux = trHOGs(Range(startPos, startPos + 1), Range(i*hs_model.m_bW * hogDim, (i + 1)*hs_model.m_bW * hogDim));
+				temp.copyTo(aux);
+			}
+			++startPos;
+		}
+	}
+
+	// Apply L2 - norm.
+	NormalizeFeatures(trHOGs);
+
+	Mat labels = Mat::ones(m_params.m_numTrWords + m_params.m_numNWords, 1, CV_64F)*-1;
+	labels.rowRange(0,m_params.m_numTrWords) = 1;
+	LibLinearWrapper ll;
+	ll.trainModel(labels, trHOGs, hs_model.weight);
+}
+
+void LearnModels::NormalizeFeatures(cv::Mat & features)
+{
+	Mat temp, rp;
+	for (int i = 0; i < features.rows; ++i)
+	{
+		double rowNorm = 1 / norm(features.row(i));
+		features.row(i) = features.row(i) * rowNorm;
+	}
+}
+
+
+/*
 void LearnModels::samplePos(Mat & posLst, const cv::Size & size, const vector<ModelInstance>& miVec)
 {
 	uint pxbin = m_params.m_sbin;

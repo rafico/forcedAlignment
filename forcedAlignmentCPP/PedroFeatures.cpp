@@ -37,6 +37,7 @@ double vv[9] = { 0.0000,
 using namespace std;
 using namespace cv;
 
+//TODO: change layout to row-major result.
 
 // main function:
 // takes a double color image and a bin size 
@@ -129,7 +130,7 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 			double vy0 = yp - iyp;
 			double vx1 = 1.0 - vx0;
 			double vy1 = 1.0 - vy0;
-			v = std::sqrt(v);
+			v = sqrt(v);
 
 			if (ixp >= 0 && iyp >= 0) {
 				*(hist + ixp*blocks[0] + iyp + best_o*blocks[0] * blocks[1]) +=
@@ -175,13 +176,13 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 			double *src, *p, n1, n2, n3, n4;
 
 			p = norm + (x + 1)*blocks[0] + y + 1;
-			n1 = 1.0 / std::sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
+			n1 = 1.0 / sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
 			p = norm + (x + 1)*blocks[0] + y;
-			n2 = 1.0 / std::sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
+			n2 = 1.0 / sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
 			p = norm + x*blocks[0] + y + 1;
-			n3 = 1.0 / std::sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
+			n3 = 1.0 / sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
 			p = norm + x*blocks[0] + y;
-			n4 = 1.0 / std::sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
+			n4 = 1.0 / sqrt(*p + *(p + 1) + *(p + blocks[0]) + *(p + blocks[0] + 1) + eps);
 
 			double t1 = 0;
 			double t2 = 0;
@@ -234,5 +235,5 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 		*w = out[1];
 	}
 
-	return feat;
+	return feat.t();
 }
