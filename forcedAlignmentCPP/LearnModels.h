@@ -18,14 +18,18 @@ public:
 	void loadTrainingData();
 	void computeFeaturesDocs();
 	void getImagesDocs();
-	void loadModels();
+	void LearnModelsAndEvaluate();
 	void learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel &hs_model);
+	void evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords);
+	void getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW);
+	vector<int> nms(Mat I, const vector<Rect>& X, double overlap);
+	const vector<Rect>& getRelevantBoxesByClass(uint classNum, uint docNum) { return m_relevantBoxesByClass[docNum*m_numClasses + classNum];}
+	void saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords);
+	void compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec);
 
 	/* For debugging */
 	void train();
 	//void getSvmDetector(uchar asciiCode, Mat &sv, double &rho);
-	//void computeScoresL2(const Mat & HogFeatures, const Mat & w, double rho, int bH, int bW, int dim, 
-	//	int nbinsH, int nbinsW, int step, Mat & score);
 	//Size getWindowSz(uchar asciiCode) { return m_WindowSz.at(asciiCode); };
 	//Size getHOGWindowSz(uchar asciiCode); 
 
@@ -40,11 +44,13 @@ private:
 	vector<uint> m_numRelevantWordsByClass;
 	vector<vector<Rect>> m_relevantBoxesByClass;
 	vector<Doc> m_docs;
+	size_t m_numClasses;
 
 	// TODO: unite to a single map.
 	unordered_map<uchar, Size> m_WindowSz;
 	unordered_map<uchar, uint> m_classes;
 
 	LMParams m_params;
+	 
 };
 #endif // !_H_LEARN_MODELS_H__

@@ -15,12 +15,22 @@ struct LMParams
 		m_propNWords(64),
 		m_numNWords(m_numTrWords*m_propNWords),
 		m_dataset("SG"),
-		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset+ "/"),
+		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset + "/"),
 		m_pathImages(m_datasetPath + "images/"),
 		m_pathDocuments(m_datasetPath + "ground_truth/character_location/"),
-		m_svmModelsLocation("D:/Dropbox/Code/forcedAlignmentCPP/svmModels/"),
-		m_dim(31)
+		m_pathData("data/"),
+		m_pathResultsParent(m_pathData + "results/"),
+		m_pathResults(m_pathResultsParent + m_dataset + "/"),
+		m_pathResultsImages(m_pathResults + "images/"),
+		m_dim(31),
+		m_step(1),
+		m_thrWindows(2000),
+		m_numResultImages(50),
+		m_overlapnms(0.2),
+		m_overlap(0.5)
 	{}
+
+	void initDirs();
 
 	//cell size.
 	uint m_sbin;
@@ -34,8 +44,16 @@ struct LMParams
 	string m_datasetPath;
 	string m_pathImages;
 	string m_pathDocuments;
-	string m_svmModelsLocation;
+	string m_pathData;
+	string m_pathResultsParent;
+	string m_pathResults;
+	string m_pathResultsImages;
 	uint m_dim;
 	uint m_numDocs;
+	uint m_step;
+	uint m_thrWindows;
+	size_t m_numResultImages;
+	double m_overlapnms;
+	double m_overlap;
 };
 #endif // !_H_LM_PARAMS_H__
