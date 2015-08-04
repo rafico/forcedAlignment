@@ -14,6 +14,7 @@ struct LMParams
 		m_numTrWords((m_rangeX.size() / m_stepSize4PositiveExamples) * (m_rangeY.size() / m_stepSize4PositiveExamples)),
 		m_propNWords(64),
 		m_numNWords(m_numTrWords*m_propNWords),
+		m_svmlib("bl"),
 		m_dataset("SG"),
 		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset + "/"),
 		m_pathImages(m_datasetPath + "images/"),
@@ -40,6 +41,7 @@ struct LMParams
 	uint m_numTrWords;
 	uint m_propNWords;
 	uint m_numNWords;
+	string m_svmlib;
 	string m_dataset;
 	string m_datasetPath;
 	string m_pathImages;

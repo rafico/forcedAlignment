@@ -9,7 +9,7 @@ struct HogSvmModel
 	uint m_newW;
 	uint m_bH;
 	uint m_bW;
-	vector<double> weight;
+	vector<float> weight;
 	double m_bias;
 };
 

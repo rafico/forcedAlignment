@@ -234,6 +234,6 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 		*h = out[0];
 		*w = out[1];
 	}
-	feat.convertTo(feat, CV_32F);
+
 	return feat.t();
 }

@@ -156,6 +156,7 @@ void LearnModels::computeFeaturesDocs()
 		clog << "Computing features and labels of doc " << i << endl;
 		int bH, bW;
 		m_docs[i].m_features = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
+		m_docs[i].m_features.convertTo(m_docs[i].m_features, CV_32F);
 		m_docs[i].m_bH = bH;
 		m_docs[i].m_bW = bW;
 	}
@@ -218,7 +219,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
 
 	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_64F);
-
+	
 	Mat imDoc = doc.m_origImage;
 	uint H = imDoc.rows;
 	uint W = imDoc.cols;
@@ -245,6 +246,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 			}
 
 			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
+			//feat.convertTo(feat, CV_32F);
 			feat.reshape(1, 1).copyTo(trHOGs.row(ps++));
 		}
 	}
@@ -255,11 +257,15 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 	int wordsByDoc = m_params.m_numNWords / m_params.m_numDocs;
 	uint startPos = m_params.m_numTrWords;
 	
+	uint dim = m_params.m_dim;
+
 	for (uint id = 0; id < m_docs.size(); ++id)
 	{
 		Mat fD = m_docs[id].m_features;
 		uint BH = m_docs[id].m_bH;
 		uint BW = m_docs[id].m_bW;
+
+		float *flat = fD.ptr<float>(0);
 
 		for (size_t jj = 0; jj < wordsByDoc; ++jj)
 		{
@@ -267,15 +273,15 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 			uniform_int_distribution<> byDis(0, BH - hs_model.m_bH - 1);
 			uniform_int_distribution<> bxDis(0, BW - hs_model.m_bW - 1);
 
-			uint hogDim = m_params.m_dim;
 			int by = byDis(gen);
 			int bx = bxDis(gen);
+			auto *flat_trHOGs = trHOGs.ptr<double>(startPos);
+
 			for (int tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
 			{
-				auto sp = tmpby*BW + bx;
-				Mat temp = fD.rowRange(Range(sp, sp + hs_model.m_bW)).reshape(1, 1);
-				Mat aux = trHOGs(Range(startPos, startPos + 1), Range(i*hs_model.m_bW * hogDim, (i + 1)*hs_model.m_bW * hogDim));
-				temp.copyTo(aux);
+				size_t stepSize = hs_model.m_bW*dim;
+				size_t pos = (tmpby*BW + bx)*dim;
+				copy(flat + pos + i*stepSize, flat + pos + (i + 1)*stepSize, flat_trHOGs + i*stepSize);
 			}
 			++startPos;
 		}
@@ -283,14 +289,21 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 	// Apply L2 - norm.
 	NormalizeFeatures(trHOGs);
-
-	Mat labels = Mat::ones(m_params.m_numTrWords + m_params.m_numNWords, 1, CV_64F)*-1;
+	trHOGs.convertTo(trHOGs, CV_32F);
+		
+	Mat labels = Mat::ones(m_params.m_numTrWords + m_params.m_numNWords, 1, CV_32F)*-1;
 	labels.rowRange(0,m_params.m_numTrWords) = 1;
-	//LibLinearWrapper ll;
-	//ll.trainModel(labels, trHOGs, hs_model.weight);
-	uint idx = floor(((m_params.m_rangeX.size() / m_params.m_stepSize4PositiveExamples) * (m_params.m_rangeY.size() / m_params.m_stepSize4PositiveExamples)) / 2);
-	double *ptr = trHOGs.ptr<double>(idx-1);
-	hs_model.weight.assign(ptr, ptr + trHOGs.cols);
+
+	if (m_params.m_svmlib == "liblinear")
+	{
+		LibLinearWrapper ll;
+		ll.trainModel(labels, trHOGs, hs_model.weight);
+	}
+	else if (m_params.m_svmlib == "bl")
+	{
+		auto *ptr = trHOGs.ptr<float>(m_params.m_numTrWords / 2 - 1);
+		hs_model.weight.assign(ptr, ptr + trHOGs.cols);
+	}
 }
 
 void LearnModels::NormalizeFeatures(cv::Mat & features)
@@ -298,8 +311,11 @@ void LearnModels::NormalizeFeatures(cv::Mat & features)
 	Mat temp, rp;
 	for (int i = 0; i < features.rows; ++i)
 	{
-		double rowNorm = 1 / norm(features.row(i));
-		features.row(i) = features.row(i) * rowNorm;
+		double rowNorm = norm(features.row(i));
+		if (rowNorm > 0)
+		{
+			features.row(i) = features.row(i) * (1/rowNorm);
+		}
 	}
 }
 
@@ -385,7 +401,6 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW)
 {
 	//TODO: optimize this function (try using GPU and/or flattening the Mat).
-	// read about std::inner_product.
 
 	// Extracts all the possible patches from a document images and computes the
 	// score given the queried word model
