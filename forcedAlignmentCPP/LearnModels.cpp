@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <cmath>
 #include <random>
 #include <opencv2/core.hpp>
@@ -12,7 +13,7 @@
 #include <algorithm>
 #include "PedroFeatures.h"
 #include "LearnModels.h"
-#include "LibLinearWrapper.h"
+//#include "LibLinearWrapper.h"
 
 using namespace boost::filesystem;
 using namespace cv;
@@ -34,7 +35,7 @@ void LearnModels::loadTrainingData()
 	clog << "* Loading documents *" << endl;
 	clog << "* Initializing test documents *" << endl;
 
-	path dir_path(m_params.m_pathDocuments, native);
+	path dir_path(m_params.m_pathDocuments);
 	if (!exists(dir_path))
 	{
 		cerr << "Error: Unable to read models from " << m_params.m_pathDocuments << std::endl;
@@ -100,7 +101,7 @@ void LearnModels::loadTrainingData()
 	
 	m_params.m_numDocs = m_docs.size();
 	m_relevantBoxesByClass.resize(m_params.m_numDocs*m_numClasses);
-	for (int i = 0; i < m_params.m_numDocs; ++i)
+	for (size_t i = 0; i < m_params.m_numDocs; ++i)
 	{
 		const auto& chars = m_docs[i].m_chars;
 		for (const auto& ch : chars)
@@ -123,11 +124,11 @@ void LearnModels::getImagesDocs()
 		uint W = doc.m_W;
 		uint res;
 
-		while (res = H % m_params.m_sbin)
+		while ((res = (H % m_params.m_sbin)))
 		{
 			H -= res;
 		}
-		while (res = W % m_params.m_sbin)
+		while ((res = (W % m_params.m_sbin)))
 		{
 			W -= res;
 		}
@@ -182,7 +183,7 @@ void LearnModels::LearnModelsAndEvaluate()
 			saveResultImages(doc, query, resultLabels, locWords);
 			double mAP, rec;
 			compute_mAP(resultLabels, nrelW, mAP, rec);
-			sprintf(buffer, "%20c (%5d): %2.2f (mAP) nRel: %d", query.m_asciiCode, index, mAP, nrelW);
+			sprintf(buffer, "%20c (%5lu): %2.2f (mAP) nRel: %d", query.m_asciiCode, index, mAP, nrelW);
 			clog << buffer << endl;
 			++index;
 		}
@@ -195,17 +196,17 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 	// We expand the query to capture some context
 	Rect loc(ci.m_loc.x - pxbin, ci.m_loc.y - pxbin, ci.m_loc.width + 2*pxbin, ci.m_loc.height + 2*pxbin);
-	uint modelNew_H = loc.height;
-	uint modelNew_W = loc.width;
+	int modelNew_H = loc.height;
+	int modelNew_W = loc.width;
 
 	uint res;
-	while (res = modelNew_H % pxbin)
+	while ((res = (modelNew_H % pxbin)))
 	{
 		modelNew_H -= res;
 		loc.height -= res;
 		loc.y += int(floor(double(res) / 2));
 	}
-	while (res = modelNew_W % pxbin)
+	while ((res = (modelNew_W % pxbin)))
 	{
 		modelNew_W -= res;
 		loc.width -= res;
@@ -221,9 +222,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_64F);
 	
 	Mat imDoc = doc.m_origImage;
-	uint H = imDoc.rows;
-	uint W = imDoc.cols;
-
+	
 	// Get positive windows
 	uint ps = 0;
 	for (auto dx = m_params.m_rangeX.start; dx < m_params.m_rangeX.end; dx += m_params.m_stepSize4PositiveExamples)	{
@@ -267,7 +266,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 		float *flat = fD.ptr<float>(0);
 
-		for (size_t jj = 0; jj < wordsByDoc; ++jj)
+		for (int jj = 0; jj < wordsByDoc; ++jj)
 		{
 			// Pick a random starting cell
 			uniform_int_distribution<> byDis(0, BH - hs_model.m_bH - 1);
@@ -277,7 +276,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 			int bx = bxDis(gen);
 			auto *flat_trHOGs = trHOGs.ptr<double>(startPos);
 
-			for (int tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
+			for (size_t tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
 			{
 				size_t stepSize = hs_model.m_bW*dim;
 				size_t pos = (tmpby*BW + bx)*dim;
@@ -296,8 +295,8 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 	if (m_params.m_svmlib == "liblinear")
 	{
-		LibLinearWrapper ll;
-		ll.trainModel(labels, trHOGs, hs_model.weight);
+		//LibLinearWrapper ll;
+		//ll.trainModel(labels, trHOGs, hs_model.weight);
 	}
 	else if (m_params.m_svmlib == "bl")
 	{
@@ -321,8 +320,6 @@ void LearnModels::NormalizeFeatures(cv::Mat & features)
 
 void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
 {
-	auto numDocs = m_params.m_numDocs;
-
 	vector<double> scoresWindows;
 	vector<bool> resultsWindows;
 	vector<pair<Rect, size_t>> locWindows;
@@ -334,7 +331,7 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 		vector<double> scsW;
 		getWindows(doc, hs_model, scsW, locW);
 		
-		for_each(scsW.begin(), scsW.end(), [](double &scs){if (isnan(scs)) scs = -1; });
+		for_each(scsW.begin(), scsW.end(), [](double &scs){if (std::isnan(scs)) scs = -1; });
 
 		Mat I;
 		sortIdx(Mat(scsW), I, SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
@@ -382,12 +379,12 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 	resultLabels.resize(scoresIdx.rows);
 	locWords.resize(scoresIdx.rows);
 	size_t lastPosElement = 0;
-	for (size_t i = 0; i < scoresIdx.rows; ++i)
+	for (int i = 0; i < scoresIdx.rows; ++i)
 	{
-		size_t idx = scoresIdx.at<int>(i);
+		int idx = scoresIdx.at<int>(i);
 		scores[i] = scoresWindows[idx];
 		locWords[i] = locWindows[idx];
-		if (resultLabels[i] = resultsWindows[idx])
+		if ((resultLabels[i] = resultsWindows[idx]))
 		{
 			lastPosElement = i;
 		}
@@ -410,8 +407,6 @@ void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector
 	float *flat = featDoc.ptr<float>(0);
 	auto bH = doc.m_bH;
 	auto bW = doc.m_bW;
-	auto xIni = doc.m_xIni;
-	auto yIni = doc.m_yIni;
 	auto nbinsH = hs_model.m_bH; 
 	auto nbinsW = hs_model.m_bW;
 	auto dim = hs_model.weight.size() / (nbinsH*nbinsW);
@@ -420,14 +415,14 @@ void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector
 	scsW.resize(numWindows);
 
 	size_t k = 0;
-	for (int by = 0; by <= bH - nbinsH; by += step)
+	for (size_t by = 0; by <= bH - nbinsH; by += step)
 	{
-		for (int bx = 0; bx <= bW - nbinsW; bx += step)
+		for (size_t bx = 0; bx <= bW - nbinsW; bx += step)
 		{
 			scsW[k] = 0;
 			double norm = 0;
 
-			for (int tmpby = by, i = 0; tmpby < by + nbinsH; ++tmpby, ++i)
+			for (size_t tmpby = by, i = 0; tmpby < by + nbinsH; ++tmpby, ++i)
 			{
 				size_t pos = (tmpby*bW + bx)*dim;
 				scsW[k] += inner_product(hs_model.weight.data() + i*nbinsW*dim, hs_model.weight.data() + (i + 1)*nbinsW*dim, flat + pos, .0);
@@ -472,7 +467,7 @@ vector<int> LearnModels::nms(Mat I, const vector<Rect>& X, double overlap)
 void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
 {
 	string qPathString = m_params.m_pathResultsImages + to_string(query.m_globalIdx+1) + "/";
-	path p(qPathString, native);
+	path p(qPathString);
 	if (!exists(p))
 	{
 		boost::filesystem::create_directory(p);
@@ -485,7 +480,7 @@ void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, co
 	for (size_t i = 0; i < numIm; ++i)
 	{
 		char flag = resultLabels[i] ? 'c' : 'e';
-		sprintf(fileName, "%.3d%c.png", i + 1, flag);
+		sprintf(fileName, "%.3lu%c.png", i + 1, flag);
 		const Rect& bb = locWords[i].first;
 		size_t docIdx = locWords[i].second;
 		Mat im = m_docs[docIdx].m_image(bb);

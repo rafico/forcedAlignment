@@ -1,7 +1,6 @@
-﻿#include <chrono>
+#include <chrono>
 #include <iostream>
 #include "LearnModels.h"
-#include "PedroFeatures.h"
 
 using namespace std;
 using namespace cv;
@@ -12,6 +11,6 @@ int main(int argc, char** argv)
 	lm.LearnModelsAndEvaluate();
 
 	cout << "Press any key to continue.";
-	auto c = getchar();
+	getchar();
 	return 0;
 }
