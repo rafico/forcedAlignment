@@ -13,8 +13,8 @@ struct Doc
 	Mat m_features;
 	uint m_nChars;
 	vector<CharInstance> m_chars;
+	uint m_H;	
 	uint m_W;
-	uint m_H;
 	string m_pathImage;
 	uint m_yIni;
 	uint m_xIni;

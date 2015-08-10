@@ -3,6 +3,7 @@
 
 #include "commonTypes.h"
 
+
 //TODO: replace hard-coded params with an xml or ini file.
 struct LMParams
 {
@@ -14,9 +15,9 @@ struct LMParams
 		m_numTrWords((m_rangeX.size() / m_stepSize4PositiveExamples) * (m_rangeY.size() / m_stepSize4PositiveExamples)),
 		m_propNWords(64),
 		m_numNWords(m_numTrWords*m_propNWords),
-		m_svmlib("liblinear"),
+		m_svmlib("bl"),
 		m_dataset("SG"),
-		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset + "/"),
+		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
 		m_pathImages(m_datasetPath + "images/"),
 		m_pathDocuments(m_datasetPath + "ground_truth/character_location/"),
 		m_pathData("data/"),

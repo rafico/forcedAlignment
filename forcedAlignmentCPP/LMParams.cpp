@@ -10,7 +10,7 @@ void LMParams::initDirs()
 
 	for (auto d : dirs)
 	{
-		path p(*d, native);
+		path p(*d);
 		if (!exists(p))
 		{
 			boost::filesystem::create_directory(p);
