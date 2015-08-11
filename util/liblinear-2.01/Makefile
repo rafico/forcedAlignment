@@ -6,7 +6,7 @@ SHVER = 3
 OS = $(shell uname)
 #LIBS = -lblas
 
-all: train predict
+all: train predict lib
 
 lib: linear.o tron.o blas/blas.a
 	if [ "$(OS)" = "Darwin" ]; then \

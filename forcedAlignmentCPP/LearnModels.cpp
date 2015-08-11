@@ -13,7 +13,7 @@
 #include <algorithm>
 #include "PedroFeatures.h"
 #include "LearnModels.h"
-//#include "LibLinearWrapper.h"
+#include "LibLinearWrapper.h"
 
 using namespace boost::filesystem;
 using namespace cv;
@@ -299,8 +299,8 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 	if (m_params.m_svmlib == "liblinear")
 	{
-		//LibLinearWrapper ll;
-		//ll.trainModel(labels, trHOGs, hs_model.weight);
+		LibLinearWrapper ll;
+		ll.trainModel(labels, trHOGs, hs_model.weight);
 	}
 	else if (m_params.m_svmlib == "bl")
 	{
