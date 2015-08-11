@@ -43,19 +43,23 @@ void LearnModels::loadTrainingData()
 	}
 
 	uint globalIdx=0;
-	directory_iterator end_itr; // default construction yields past-the-end
-	for (directory_iterator itr(dir_path); itr != end_itr; ++itr)
+
+	vector<path> vp; // store paths, so we can sort them later
+	copy(directory_iterator(dir_path), directory_iterator(), back_inserter(vp));
+	sort(vp.begin(), vp.end()); // sort, since directory iteration is not ordered on some file systems
+
+	for (const auto &itr : vp)
 	{
-		if (itr->path().extension() == ".csv")
+		if (itr.extension() == ".csv")
 		{
-			cout << "Loading " << itr->path().filename() << endl;
-			std::ifstream str(itr->path().string());
+			cout << "Loading " << itr.filename() << endl;
+			std::ifstream str(itr.string());
 			if (!str.good())
 			{
-				std::cerr << "Error: Unable to read models from " << itr->path().string() << std::endl;
+				std::cerr << "Error: Unable to read models from " << itr.string() << std::endl;
 			}
 			
-			string fileName = itr->path().filename().stem().string();
+			string fileName = itr.filename().stem().string();
 			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
 			cv::Mat image = cv::imread(fullFileName);
 
