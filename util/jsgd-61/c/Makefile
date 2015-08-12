@@ -10,10 +10,20 @@ CFLAGS=-g -Wall -fPIC -O3
 
 BLASLIB=/usr/lib64/atlas/libf77blas.so.3
 
-all : x_matrix.o jsgd.o
+all : x_matrix.o jsgd.o libjsgd.so
 
 x_matrix.o: x_matrix.c x_matrix.h
 	gcc -c -o $@ $< $(CFLAGS) -Dinteger=long -DBLAS_WITH_THREADS -fopenmp
 
 jsgd.o: jsgd.c jsgd.h x_matrix.h
 	gcc -c -o $@ $< $(CFLAGS) -fopenmp
+
+test.o : test.cpp
+	g++ -c -o $@ $< $(CFLAGS)
+
+libjsgd.so: jsgd.o x_matrix.o
+	$(CXX) -shared $^ -o $@
+
+test : libjsgd.so test.o
+	g++ -fopenmp /usr/lib64/libblas.so.3.4.2 $^ -o $@ 
+

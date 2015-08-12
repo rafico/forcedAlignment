@@ -22,6 +22,12 @@
  * 
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+
 #ifndef sparse_index_t 
 #define sparse_index_t int
 #define sparse_data_t float 
@@ -204,6 +210,9 @@ void x_matrix_addto_sparse(const x_matrix_t *x,
                            int nw, 
                            int d_step);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

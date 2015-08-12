@@ -1,8 +1,15 @@
 #ifndef SGD_H_INCLUDED
 #define SGD_H_INCLUDED
 
-#include "x_matrix.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+
+#include <assert.h>
+#include <math.h>
+#include <sys/time.h>
+#include "x_matrix.h"
 
 
 /* Type of a callback function to compute the accuracy of a score. */
@@ -154,5 +161,9 @@ void jsgd_compute_scores(const x_matrix_t *x, int nclass,
                          float bias_term, 
                          int threaded, 
                          float *scores);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -9,10 +9,12 @@ VPATH =  $(SRCDIR)
 
 # Additional headers and libraries directories
 LIBLINEAR_PATH = ../../util/liblinear-2.01
+JSGD_PATH = ../../util/jsgd-61/c
 
 CC = g++ 
-CXXFLAGS = -std=c++11 -Wall -I$(LIBLINEAR_PATH)
-LDLIBS = -L/usr/local/lib/
+CXXFLAGS = -std=c++11 -Wall -I$(LIBLINEAR_PATH) -I$(JSGD_PATH)
+LDLIBS = -L/usr/local/lib/ -L/home/auser/forcedAlignment/util/jsgd-61/c
+LDFLAGS = -fopenmp
 
 # Check if the configuration is Release or Debug
 ifeq ($(CONFIGURATION),Debug)
@@ -25,7 +27,7 @@ else
 endif
 
 LDLIBS +=  -lboost_system -lboost_filesystem -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml \
--lopencv_imgcodecs $(LIBLINEAR_PATH)/liblinear.so.3
+-lopencv_imgcodecs $(LIBLINEAR_PATH)/liblinear.so.3 -ljsgd /usr/lib64/libblas.so.3.4.2
 
 ifeq ($(ATLAS),yes)
 	CXXFLAGS += -D_USE_ATLAS_
@@ -33,10 +35,11 @@ ifeq ($(ATLAS),yes)
   	LDLIBS += -lcblas -latlas
 endif
 
+
 # Targets
 PROGRAMS = test
 all: $(PROGRAMS)
-test: test.o LearnModels.o LMParams.o CharInstance.o Doc.o PedroFeatures.o LibLinearWrapper.o
+test: test.o LearnModels.o LMParams.o CharInstance.o Doc.o PedroFeatures.o LibLinearWrapper.o JsgdWrapper.o
 LearnModels.o : LearnModels.cpp LearnModels.h HogSvmModel.h
 CharInstance.o : CharInstance.cpp CharInstance.h commonTypes.h
 LMParams.o : LMParams.cpp LMParams.h commonTypes.h
