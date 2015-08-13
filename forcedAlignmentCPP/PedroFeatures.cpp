@@ -67,7 +67,7 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 	out[0] = max(blocks[0] - 2, 0);
 	out[1] = max(blocks[1] - 2, 0);
 	out[2] = 27 + 4;
-	Mat feat(31, out[0] * out[1], CV_64F);
+	Mat feat(out[0] * out[1], out[2], CV_64F);
 
 	int visible[2];
 	visible[0] = blocks[0] * sbin;
@@ -78,9 +78,9 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 
 			// first color channel
 			double *s = im + min(y, dims[0] - 2)*dims[1] * 3 + min(x, dims[1] - 2) * 3;
-			double dx = *(s + 3) - *(s - 3);
-			double dy = *(s + 3 * dims[1]) - *(s - 3 * dims[1]);
-			double v = dx*dx + dy*dy;
+			double dx3 = *(s + 3) - *(s - 3);
+			double dy3 = *(s + 3 * dims[1]) - *(s - 3 * dims[1]);
+			double v3 = dx3*dx3 + dy3*dy3;
 
 			// second color channel
 			++s;
@@ -90,9 +90,9 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 
 			// third color channel
 			++s;
-			double dx3 = *(s + 3) - *(s - 3);
-			double dy3 = *(s + 3 * dims[1]) - *(s - 3 * dims[1]);
-			double v3 = dx3*dx3 + dy3*dy3;
+			double dx = *(s + 3) - *(s - 3);
+			double dy = *(s + 3 * dims[1]) - *(s - 3 * dims[1]);
+			double v = dx*dx + dy*dy;
 
 			// pick channel with strongest gradient
 			if (v2 > v) {
@@ -167,12 +167,12 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 		}
 	}
 
-	auto pFeat = feat.ptr<double>(0);
+	double *pFeat = feat.ptr<double>(0);
 
 	// compute features
-	for (int y = 0; y < out[0]; y++) {
-		for (int x = 0; x < out[1]; x++) {
-			double *dst = pFeat + y*out[1] + x;
+	for (int x = 0; x < out[1]; x++) {
+	        for (int y = 0; y < out[0]; y++) {
+			double *dst = pFeat + (y*out[1] + x)*out[2];
 			double *src, *p, n1, n2, n3, n4;
 
 			p = norm + (x + 1)*blocks[0] + y + 1;
@@ -196,12 +196,11 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 				double h2 = min(*src * n2, 0.2);
 				double h3 = min(*src * n3, 0.2);
 				double h4 = min(*src * n4, 0.2);
-				*dst = 0.5 * (h1 + h2 + h3 + h4);
+				*dst++ = 0.5 * (h1 + h2 + h3 + h4);
 				t1 += h1;
 				t2 += h2;
 				t3 += h3;
 				t4 += h4;
-				dst += out[0] * out[1];
 				src += blocks[0] * blocks[1];
 			}
 
@@ -213,19 +212,15 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 				double h2 = min(sum * n2, 0.2);
 				double h3 = min(sum * n3, 0.2);
 				double h4 = min(sum * n4, 0.2);
-				*dst = 0.5 * (h1 + h2 + h3 + h4);
-				dst += out[0] * out[1];
+				*dst++ = 0.5 * (h1 + h2 + h3 + h4);
 				src += blocks[0] * blocks[1];
 			}
 
 			// texture features
-			*dst = 0.2357 * t1;
-			dst += out[0] * out[1];
-			*dst = 0.2357 * t2;
-			dst += out[0] * out[1];
-			*dst = 0.2357 * t3;
-			dst += out[0] * out[1];
-			*dst = 0.2357 * t4;
+			*dst++ = 0.2357 * t1;
+			*dst++ = 0.2357 * t2;
+			*dst++ = 0.2357 * t3;
+			*dst++ = 0.2357 * t4;
 		}
 	}
 
@@ -235,5 +230,5 @@ cv::Mat PedroFeatures::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*
 		*w = out[1];
 	}
 
-	return feat.t();
+	return feat;
 }
