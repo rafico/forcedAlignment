@@ -9,24 +9,9 @@ What is this?
 
 This a Stochastic Gradient Descent algorithm used to train linear
 multiclass classifiers. It is biased towards large classification
-problems (many classes, many examples, high dimensional
-data). 
-
+problems (many classes, many examples, high dimensional data).
 
 The reference paper is: 
-
-
-@article{akata:hal-00835810, 
-  AUTHOR = {Akata, Zeynep and Perronnin, Florent and Harchaoui, Zaid and Schmid, Cordelia},
-  TITLE = {{Good Practice in Large-Scale Learning for Image Classification}}, 
-  JOURNAL = {{IEEE Transactions on Pattern Analysis and Machine Intelligence}},
-  PUBLISHER = {David A. Forsyth},
-  YEAR = {2013},
-  MONTH = Jun,
-  URL = {http://hal.inria.fr/hal-00835810} 
-}
-
-
 
 @inproceedings{perronnin:hal-00690014, 
   AUTHOR = {Perronnin, Florent and Akata, Zeynep and Harchaoui, Zaid and Schmid, Cordelia}, 
@@ -38,9 +23,7 @@ The reference paper is:
   URL = {http://hal.inria.fr/hal-00690014} 
 }
 
-
-
-The code uses similar acceleration tricks, yet adapted to large-scale image classification, than the ones used in L. Bottou's package, available at 
+The package is also inspired by Leon Bottou's package, available at 
 
 http://leon.bottou.org/projects/sgd
 
@@ -49,7 +32,7 @@ Files
 
 The directories in the package are:
 
-ref/    contains a basic Matlab implementation of the SGD algorithm based on the paper.
+ref/    contains a basic Matlab implementation of the SGD algorithm.
 
 c/      contains the C implementation.
 
@@ -69,8 +52,7 @@ Requirements:
 platform was tested.
 
 - an implementation of the Basic Linear Algebra Subroutines (BLAS),
-that are interfaced with the Fortran conventions. 
-
+that are interfaced with the Fortran conventions.
 
 - SSE vector operations. They are declared using the gcc intrinsics.
 
@@ -82,7 +64,7 @@ To compile the Matlab interface, do
 
   make mex  
 
-For the Octave (Matlab work-alike) interface: 
+For the Octave (Maltab work-alike) interface: 
 
   make octave
 
@@ -90,18 +72,13 @@ For the Python interface:
 
   make py 
 
-On Ubuntu, sudo apt-get install liboctave-dev should install both
-octave and atlas. Be sure to change the line in the Makefile
-concerning octave to the required version.
-
-
-Additional software 
---------------------
+Additional software and data
+----------------------------
 
 Although the library is self contained, the examples rely on:
 
 - Yael (https://gforge.inria.fr/projects/yael/), and its Matlab
-interface. 
+interface. The 
 
 - H. Jegou's Matlab implementation of PQcodes
 (http://www.irisa.fr/texmex/people/jegou/ann.php) for the PQ encoding. 
@@ -118,14 +95,14 @@ commands download and install all the required files (run from the
 jsgd-xx directory):
 
 # get Yael (need svn version...)
-svn checkout --username anonsvn --password anonsvn --no-auth-cache  https://scm.gforge.inria.fr/svn/yael/trunk yael
+svn checkout --username anonsvn   --password anonsvn --no-auth-cache  https://scm.gforge.inria.fr/svn/yael/trunk yael
 
 # compile
 cd yael
 ./configure.sh --enable-numpy
 make
 
-# compile matlab interface of Yael
+# compile matlab interface 
 cd matlab
 make
 cd ../..
@@ -133,6 +110,11 @@ cd ../..
 # get pqcodes 
 wget http://www.irisa.fr/texmex/people/jegou/src/pqsearch_2188.tar.gz
 tar xvzf pqsearch_2188.tar.gz
+
+# get additional data
+wget http://pascal.inrialpes.fr/data2/douze/jsgd_data/groupFungus_k64_nclass134_nex50.tgz
+tar xzf groupFungus_k64_nclass134_nex50.tgz
+
 
 Interfaces
 ==========
@@ -142,10 +124,11 @@ Python interface. They provide a Matlab/Python jsgd_train function
 that takes Matlab/Python matrices as input. The algorithm parameters
 are passed as optional arguments to the functions.
 
+
 Matlab interface
 ----------------
 
-The Matlab interface uses single matrices for floating-point data and
+The matlab interface uses single matrices for floating-point data and
 int32 matrices for indices, labels, etc. 
 
 Python interface
@@ -154,7 +137,7 @@ Python interface
 The Python interface uses numpy matrices for i/o. The matrices should
 be "c_compact", which means that all matrix dimensions in the
 documentation should be transposed. The matrices should be of type
-numpy.float32 or numpuy.int32 for floating-point and integer matrices
+numpy.float32 or numpuy.int32 for int and float matrices
 respectively. You should also set the PYTHONPATH to point on
 jsgd-xx/yael, eg.
 
@@ -165,62 +148,61 @@ Examples
 
 Examples are provided in Matlab and Python for readability. 
 
-After installing the package (see "Compiling"  above) and its optional
-dependencies (see "Additional software" above), you can get started
-with some examples. Download a dataset available on
-lear.inrialpes.fr/src/jsgd/.
+Matlab implementation
+---------------------
 
-E.g. wget http://pascal.inrialpes.fr/data2/douze/jsgd_data/groupFungus_k64_nclass10_nex10.tgz.
+A Matlab implementation of SGD is in the ref/ subdirectory. It is a
+straightforward translation of the method described in the
+article. The computations in the optimized version are based on this.
 
-Uncompress it to your local folder:
+  sgd_simple.m:           SGD implementation
 
-E.g. tar xzf groupFungus_k64_nclass10_nex10.tgz
+  generate_toy_data.m:    randomly generate a training and a test set.
 
-To train a One-versus-Rest classifier, use 
+  sgd_simple_toy_data.m:  runs both, computes the accuracy and shows 
+                          results graphically.
 
-cd matlab;
-octave --eval "test_jsgd_train"
-matlab -nojvm -nodesktop -r "test_jsgd_train; exit"
+Simple example scripts
+----------------------
 
-Other useful options and datasets are shown commented in the
-test_jsgd_train.m file. 
+Please make sure the "additional software and data" (see above) is
+installed. The scripts 
 
+  python/test_jsgd.py 
+
+  matlab/test_jsgd_train.m
+
+show how to perform training on provided input sets, with fixed
+parameters. See the scripts on how to use.
 
 Product quantizer encoding 
 --------------------------
 
 The script 
 
-  matlab/test_pq_encoded.m
+ matlab/test_pq_encoded.m
 
 shows how to learn a product quantizer, how to encode the training set
 and how to train a classifier on the encoded training data.
 
-#Follow the additional software steps
-wget http://pascal.inrialpes.fr/data2/douze/jsgd_data/groupFungus_k64_nclass134_nex50.tgz
-tar xzf groupFungus_k64_nclass134_nex50.tgz
-cd matlab
-matlab -nojvm -nodesktop -r "test_pq_encoded; exit;"
-
 Cross-validation of parameters
 ------------------------------
 
-The classifier output by SGD is only as good as the parameters it is
-computed with. The default parameters will produce a suboptimal
-classifier. The main parameters are:
+The SGD is only as good as the parameters it is computed with. The
+default parameters will produce a suboptimal classifier. The main
+parameters are:
 
   lambda             penalty term for W norm
   bias_term          this term is appended to each training vector
   eta0               intial value of the gradient step 
   beta               for OVR, how many negatives to sample per training vector
-  temperature        for STF, the stiffness of the loss
 
 The script 
 
   python/crossval.py
 
 Optimizes the parameters by stepping from a parameter set to another,
-monitoring the cross-validated accuracy in the meantime. Unfortunately, 
+monitoring the corss-validated accuracy in the meantime. Unfortunately, 
 this relatively exaustive exploration of the parameter space is slow 
 (see below for a few tips on determining optimal parameters).
 
@@ -233,14 +215,8 @@ The script
 
 reproduces the results from the supplementary material of the CVPR
 paper (table 2, Ungulate with 50 examples per class). It shows how to
-optimize a subet of parameters and how to use sparse descriptors (it
-is based on a BOW in 4096D).
-
-#Additional softwares
-wget http://pascal.inrialpes.fr/data2/douze/jsgd_data/groupUngulate_BOW4096.tgz
-tar xzf groupUngulate_BOW4096.tgz
-cd python
-python example_BOW.py
+optimize a subet of parameters and to use sparse descriptors (it is
+based on a BOW in 4096D). 
 
 Library layout
 ==============
@@ -290,7 +266,7 @@ The function returns
 Optional parameters
 -------------------
 
-In Matlab, optional parameters are passed as
+In Matlab, optional parameters are passed  
 
    'option_name', option_value 
 
@@ -304,16 +280,14 @@ The most important ones:
 
   lambda             penalty term for W norm (_lambda in Python)
   bias_term          this term is appended to each training vector
-  eta0               intial value of the gradient step 
+  eta0               intial value of the gradient step */
   beta               for OVR, how many negatives to sample per training vector
-  temperature        for STF, the stiffness of the loss (beta on the website)
   fixed_eta          (boolean) use a fixed step
 
   verbose            verbosity level (integer, default 0)
-  n_thread           if non-zero, try to use threads (does not set the number of threads)
+  n_thread           if non-zero, try to use threads (for now)
   random_seed        running with the same random seed should give the same results
-  algo               string, 'ovr', 'mul', 'rnk', 'war', etc, selecting the 
-                     algorithm (in C, use the JSGD_ALGO_* constants)
+  algo               string, 'ovr', 'mul', 'rnk' or 'war' selecting the algorithm
   n_epoch            number of passes through the data
   
   valid              matrix of validation examples
@@ -324,27 +298,6 @@ The most important ones:
                      at the previous evaluation + this much. Set to
                      something like -0.05 to stop iterating when all
                      hope is lost to obtain a better operating point.
-
-
-Documentation
-=============
-
-Matlab codes for didactical purpose are provided for better understanding of the mex-files in the /ref folder. 
-They provide a straightforward translation of the methods described in both
-articles. 
-
-Do not use these codes to run your large-scale experiments. Use the codes in the matlab folder instead. 
-
-Comprehensive Matlab implementation
------------------------------------
-
-  sgd_simple.m:           SGD implementation
-
-  generate_toy_data.m:    randomly generate a training and a test set.
-
-  sgd_simple_toy_data.m:  runs both, computes the accuracy and shows 
-                          results graphically.
-
 
 Determining optimal parameters of SGD
 =====================================
@@ -360,7 +313,7 @@ which speeds up the estimation. See example_BOW.py for an
 example. 
 
 An intermediate result of optimize() can be used (see the "keep"
-messages of the cross-validation).
+messages of the cross-validation.
 
 For OVR, beta is an important parameter. Setting it to the square root
 of the number of classes seems a good starting point (if beta = 0 on
@@ -373,8 +326,8 @@ passed-in eta0 is 0.
 It is not useful to fine-tune the parameters very precisely. The
 optimization criterion (top-1 accuracy on cross-validated datasets) is
 quite noisy, so choosing small steps on the parameters leads to local
-minima. Therefore, crossval.py optimizes lambda, eta0, temperature and 
-bias_term by powers of 10.
+minima. Therefore, crossval.py optimizes lambda, eta0 and bias_term by
+powers of 10.
 
 If a validation set is available, do early stopping, and evaluate
 every 10 or so epochs. For this, set stop_valid_threshold = -0.05,
@@ -441,7 +394,8 @@ The corresponding codes are in array
 
 ** encoding = JSGD_X_SPARSE
 
-The matrix is a sparse column matrix (a la Matlab). Compressed Sparse Columuns (CSC)
+The matrix is a sparse column matrix (a la Matlab). html for the
+layout.
 
   indptr(n + 1)    points to the the first non-0 cell in column j
   indices(nnz)     indices[indptr[j]] .. indices[indptr[j]] are 
@@ -463,7 +417,7 @@ above and c/jsgd.h for an explanation of its fields.
 Optimizations
 =============
 
-All algorithms can be expressed as (see ref/sgd_simple.m)
+The four algorithms can be expressed as (see ref/sgd_simple.m)
 
   for t = 1 to n 
   
@@ -588,9 +542,7 @@ Homepage: http://lear.inrialpes.fr/src/jsgd/
 
 License: Cecill (see http://www.cecill.info/licences/Licence_CeCILL_V1.1-US.txt), similar to GPL
 
-Contact: 
-Mattis Paulin,  mattis.paulin@inria.fr
-Matthijs Douze, matthijs.douze@inria.fr
+Contact: Matthijs Douze, matthijs.douze@inria.fr
 
-Last update 2013-06-17
+Last update 2012-06-07
 

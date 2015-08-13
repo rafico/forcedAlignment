@@ -11,6 +11,8 @@ using std::string;
 using std::vector;
 using std::unordered_map;
 using std::pair;
+using std::cout;
+using std::endl;
 
 using cv::Rect;
 using cv::Size;

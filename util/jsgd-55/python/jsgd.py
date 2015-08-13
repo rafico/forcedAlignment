@@ -34,10 +34,6 @@ def _get_ptr(m):
   if m.dtype == numpy.float64: return jsgd_wrap.numpy_to_dvec_ref(m)
   raise TypeError('type %s not handled' % m.dtype)
   
-def _call_accuracy_function(accuracy_function, scores, y, nclass, n):
-  scores = jsgd_wrap.fvec_to_numpy_ref(scores, nclass * n).reshape((n, nclass))
-  y = jsgd_wrap.ivec_to_numpy_ref(y, n)
-  return accuracy_function(scores, y)
 
 class Stats:
   pass
@@ -47,8 +43,6 @@ def jsgd_train(x, y,
                valid_labels = None,
                want_stats = False,
                algo = None,
-               accuracy_function = None,
-               avg = None,
                **kwargs):
   
   n, d = x.shape
@@ -74,16 +68,6 @@ def jsgd_train(x, y,
   if algo != None:
     params.algo = getattr(jsgd_wrap, "JSGD_ALGO_" + algo.upper())
 
-  if avg != None:
-    params.avg = getattr(jsgd_wrap, "JSGD_AVG_" + avg.upper())
-
-  if accuracy_function != None:
-    # this is really black magic :-(
-    f = lambda *args: _call_accuracy_function(accuracy_function, *args)
-    ptr = jsgd_wrap.callable_to_ptr(f)
-    assert ptr
-    params.accuracy_function_arg = ptr  
-
   # all other arguments are converted automagically
     
   for k, v in kwargs.items():
@@ -98,7 +82,7 @@ def jsgd_train(x, y,
     stats = Stats()    
     fields = [
       ("valid_accuracies", numpy.float64), ("times", numpy.float64), ("train_accuracies", numpy.float64),
-      ("ndotprods", numpy.int32), ("nmodifs", numpy.int32), ("objectives",numpy.float32)];
+      ("ndotprods", numpy.int32), ("nmodifs", numpy.int32)];
     for field_name, np_type in fields:      
       a = numpy.zeros(params.na_stat_tables, dtype = np_type)
       setattr(stats, field_name, a)
@@ -114,9 +98,10 @@ def jsgd_train(x, y,
   jsgd_wrap.jsgd_train(nclass, train_matrix, _get_ptr(y),
                        _get_ptr(W), _get_ptr(biases),
                        params)
+
   # bias = additional line in W
   W = numpy.hstack([W, biases * params.bias_term])
-
+  
   if want_stats:
     for field in  'niter', 'ndp', 'nmodif', 't_eval', 'best_epoch':
       setattr(stats, field, getattr(params, field))  
@@ -181,6 +166,10 @@ if __name__ == '__main__':
   params = {'_lambda': 1e-7, 'beta': beta, 'eta0': 0.1, 'bias_term': 0.1}
   n_epoch = 2
 
+
+  t_block = 16
+  n_wstep = 32
+
   print params, t_block, n_wstep
     
   
@@ -192,6 +181,9 @@ if __name__ == '__main__':
                        verbose = 2,                       
                        want_stats = True,
                        n_thread = 1,
+                       t_block = t_block,
+                       use_self_dotprods = 1,
+                       n_wstep = n_wstep,
                        **params)
   print "times:", stats.times
   print "time for eval:", stats.t_eval

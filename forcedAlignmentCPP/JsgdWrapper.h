@@ -2,16 +2,16 @@
 #define _H__JSGD_WRAPPER_H__
 
 #include "commonTypes.h"
-#include "jsgd.h"
+
+// This library doesn't compile under windows and I don't have the time to port it.
+#ifndef _WIN32 
+	#include "jsgd.h"
+#endif // !_WIN32
 
 class JsgdWrapper
 {
 public:
-	JsgdWrapper();
-	void trainModel(Mat labels, Mat trainingData, vector<float>& weight);
-
-private:
-	jsgd_params_t m_params;
+	static void trainModel(Mat labels, Mat trainingData, vector<float>& weight);
 };
 
 

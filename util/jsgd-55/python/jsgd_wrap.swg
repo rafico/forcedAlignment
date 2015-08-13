@@ -20,6 +20,7 @@
 }
 
 
+
 /*************************************************************************
  * arrays
  */
@@ -74,6 +75,8 @@ def _frompointer_and_acquire(aclass,ptr):
 
 array_class_plus(float,fvec)
 array_class_plus(int,ivec)
+
+
 
 /*************************************************************************
  * Numpy wrapper 
@@ -163,73 +166,6 @@ NUMPY_EXCHANGE(bvec, unsigned char, NPY_UINT8);
 NUMPY_EXCHANGE(fvec, float, NPY_FLOAT32);
 NUMPY_EXCHANGE(ivec, int, NPY_INT32);
 NUMPY_EXCHANGE(dvec, double, NPY_FLOAT64);
-
-/*************************************************************************
- * Callbacks 
- */
-
-	  	
-
-%{
-
-typedef struct { 	 
-  PyObject *callable; 	 
-  PyThreadState *_save; 	 
-} callback_t; 	 
-	  	
-static double compute_accuracy_callback(const float *scores, const int *y, int nclass, int n, 
-                                        void *arg) {  
-  double ret = -1; 
-  callback_t *callback=(callback_t*)arg; 	 
-  PyEval_RestoreThread(callback->_save); 	 
-  { 	 
-    PyObject *p_scores = SWIG_NewPointerObj(scores, SWIGTYPE_p_float, 0); 
-    PyObject *p_y = SWIG_NewPointerObj(y, SWIGTYPE_p_int, 0); 
-    PyObject *arglist = Py_BuildValue("(OOii)", p_scores, p_y, nclass, n);
-    PyObject *obj = PyEval_CallObject(callback->callable, arglist);
-    Py_DECREF(arglist);
-    Py_DECREF(p_y);
-    Py_DECREF(p_scores);
-
-    if(!obj) { 	 
-      fprintf(stderr,"!!!exception in compute_accuracy_callback\n"); 	 
-      PyErr_Print(); 	 
-    } else {
-      ret = PyFloat_AsDouble(obj);
-      Py_DECREF(obj); 	 
-    }
-  } 	 
-  callback->_save = PyEval_SaveThread(); 	 
-  return ret;
-}
-
-void *callable_to_ptr(PyObject *o) {
-  if(!PyCallable_Check(o)) {
-    fprintf(stderr, "callable_to_ptr did not get a callable\n"); 
-    return NULL; 
-  }
-  return o;
-}
-
-
-%}
-
-// special case
-%exception jsgd_train { 	 
-  jsgd_params_t *params = arg6; /* this is really dependent on SWIG version.... */
-  callback_t cb; 
-  if(params->accuracy_function_arg) {
-    params->accuracy_function = &compute_accuracy_callback;
-    cb.callable = params->accuracy_function_arg;
-  }
-  params->accuracy_function_arg = &cb;
-  cb._save = PyEval_SaveThread(); 	 
-  $action 	 
-  PyEval_RestoreThread(cb._save); 	 
-}
-
-void *callable_to_ptr(PyObject *); 
-
 
 /*************************************************************************
  * jsgd

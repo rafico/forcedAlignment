@@ -18,8 +18,6 @@ else
   Lvalid = [];
 end
 
-
-% add bias_term as last component of the vectors (the bias is not manipulated separately)
 Xtrain = [Xtrain ; ones(1, n) * opt.bias_term];
 Xvalid = [Xvalid ; ones(1, size(Xvalid, 2)) * opt.bias_term];
 
@@ -41,8 +39,6 @@ tic;
 
 best_accuracy_on_valid = -1;
 
-% Main loop over examples. 
-% npass / n = number of epochs
 for t = 1:opt.npass
   
   i = mod(t - 1, n) + 1;
@@ -50,25 +46,22 @@ for t = 1:opt.npass
   xi = Xtrain(:, i);
   yi = Ltrain(i); 
 
-  
   eta = opt.eta0 / (1 + opt.lambda * opt.eta0 * t);
-  fw = 1 - eta * opt.lambda; % damping factor for W
+  fw = 1 - eta * opt.lambda;
   
   switch opt.otype
    
    case 'ovr'
-
-    % we loop over examples, so we have to sample the classes to modify
-    % (instead of looping over classes and sampling examples)
-        
+    
+    % choose w's to modify
+    
     ybars = randperm(nclass);
-    % make sure the positive class label is sampled
     ybars(find(ybars == yi)) = ybars(1);  
     ybars = [yi ybars(2:opt.beta + 1)];   
-        
+    
     for ybar = ybars
       pm = (ybar == yi) * 2 - 1; % +/-1 label
-      L_ovr = max(0, 1 - pm * W(:, ybar)' * xi); % OVR loss
+      L_ovr = max(0, 1 - pm * W(:, ybar)' * xi);          
 
       ndp = ndp + 1;
       
@@ -89,7 +82,7 @@ for t = 1:opt.npass
    
     ndp = ndp + nclass;
     
-    % find worst violation
+    % worst violation
     [max_val, ybar] = max(scores); 
     
     W = fw * W;
@@ -107,8 +100,7 @@ for t = 1:opt.npass
     if ybar >= yi
       ybar = ybar + 1;
     end
-
-    % triangular loss 
+    
     L_tri = max(0, 1 - W(:, yi)' * xi + W(:, ybar)' * xi); 
     ndp = ndp + 2; 
     
@@ -123,8 +115,7 @@ for t = 1:opt.npass
     end
     
    case 'war'
-
-    % scan classes in a random order 
+    
     ybars = randperm(nclass);
     ybars(find(ybars == yi)) = [];
 
@@ -137,7 +128,6 @@ for t = 1:opt.npass
       L_tri = max(0, 1 - score_yi + W(:, ybar)' * xi); 
       ndp = ndp + 1;      
       if L_tri > 0
-        % found a violation 
         break
       end      
     end
@@ -157,14 +147,12 @@ for t = 1:opt.npass
 
   
   if mod(t, opt.eval_freq) == 0
-    fprintf(1, 'Evaluation at pass %d (%.3f s), %d vector ops\n',...
-            t, toc(), ndp + nmodif);
+    fprintf(1, 'Evaluation at pass %d (%.3f s), %d dot prods, %d W modifications\n',...
+            t, toc(), ndp, nmodif);
     
     scores = W' * Xtrain; 
     [ ignored, found_labels ] = max(scores);
     accuracy_on_train = sum(found_labels == Ltrain) / length(Ltrain)
-
-    % if we have a validation set 
     if length(Xvalid) > 0
       scores = W' * Xvalid; 
       [ ignored, found_labels ] = max(scores);

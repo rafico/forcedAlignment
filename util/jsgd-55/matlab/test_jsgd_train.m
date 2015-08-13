@@ -1,7 +1,7 @@
 addpath('../yael/matlab')
 
-basename = '../example_data/groupFungus_k64_nclass10_nex10'
-%basename = '../example_data/groupFungus_k64_nclass134_nex50' %This dataset can take more than an hour to run.
+
+basename = '../example_data/groupFungus_k64_nclass134_nex50'
 
 % load train data
 Xtrain = fvecs_read([basename '_Xtrain.fvecs']);
@@ -30,7 +30,6 @@ n_epoch = 60;
                        'verbose', 2, ...
                        'eval_freq', n_epoch, ...
                        'n_epoch', n_epoch, ...
-		       'avg','NONE',...
                        'n_thread', 1);
 
 % with other algorithms below...

@@ -38,37 +38,30 @@ def load_BOW(group, k, nclass, nex):
 
     # normalizations: power norm + L1 normalization
     descs = numpy.sqrt(descs)
-    norm = descs.sum(axis = 1).reshape(ni, 1)
-    norm[norm==0] = 1
-    descs /= norm
+    descs /= descs.sum(axis = 1).reshape(ni, 1)
 
     
     ntrain = ni / 2
     # keep only nex of the ntrain learning parameters
-    Xtrain.append(descs[0:min(ntrain,nex), :])
-    Ltrain.append(i * numpy.ones((min(ntrain,nex)), dtype = numpy.int32))
-
-    assert Ltrain[-1].shape[0] == Xtrain[-1].shape[0],"%d %d"%(Ltrain[-1].shape[0], Xtrain[-1].shape[0])
+    Xtrain.append(descs[0:nex, :])
+    Ltrain.append(i * numpy.ones((1, nex), dtype = numpy.int32))
 
     # the rest is for testing
     Xtest.append(descs[ntrain:ni, :])
-    Ltest.append(i * numpy.ones((ni - ntrain), dtype = numpy.int32))
+    Ltest.append(i * numpy.ones((1, ni - ntrain), dtype = numpy.int32))
 
   # stack the matrices
   Xtrain = numpy.vstack(Xtrain)
-  Ltrain = numpy.concatenate(Ltrain)
+  Ltrain = numpy.hstack(Ltrain)
 
   Xtest = numpy.vstack(Xtest)
-  Ltest = numpy.concatenate(Ltest)
-
-  print Xtrain.shape, Ltrain.shape
-  assert Xtrain.shape[0]==Ltrain.shape[0]
+  Ltest = numpy.hstack(Ltest)
 
   return Xtrain, Ltrain.T, Xtest, Ltest.T
 
 
 # training examples per class
-nex = 100
+nex = 50
 # limit to this many classes
 nclass = 183
 
@@ -84,7 +77,7 @@ numpy.random.seed(0)
 
 perm = numpy.random.permutation(n)
 Xtrain = Xtrain[perm, :]
-Ltrain = Ltrain[perm]
+Ltrain = Ltrain[perm,:]
 
 # split test in valid + test
 ntest = Ltest.size
@@ -103,7 +96,7 @@ ntest = Xtest.shape[0]
 
 print "test size: %d, valid size: %d" % (ntest, nvalid)
 
-if False:
+if True:
   # train with sparse matrices. A bit faster and same result.
   Xtrain = scipy.sparse.csr_matrix(Xtrain)
   Xvalid = scipy.sparse.csr_matrix(Xvalid)
@@ -118,14 +111,12 @@ if False:
   # change some of the default parameters
   co.max_epoch = 200
 
-  # To use Bottou's algorithm to find eta0 at the beginning of
-  # jsgd_train, do:
-  # co.constant_parameters['eta0'] = 0
-
-  co.constant_parameters['stop_valid_threshold'] = -0.02
+  # we do not optimize on eta0, so we fix it to 0 here (ie. use
+  # Bottou's algorithm to find eta0 at the beginning of jsgd_train.
+  co.constant_parameters['eta0'] =  0
 
   # starting point
-  co.init_point = {'_lambda': 1e-07, 'beta': 10, 'bias_term': 0.001, 'eta0': 1}
+  co.init_point = {'_lambda': 1e-06, 'beta': 20, 'bias_term': 0.01}
 
   # perform optimization (result on screen)
   co.optimize()
@@ -142,11 +133,11 @@ else:
                  verbose = 2,                       
                  n_thread = 1,       # use threads
                  _lambda = 1e-7,
-                 beta = 10,
+                 beta = 20,
                  eta0 = 0,
-                 bias_term = 0.001,
+                 bias_term = 0.01,
                  stop_valid_threshold = -0.02)
-
+                 
   # evaluate the found W
   Xtest1 = numpy.hstack([Xtest, numpy.ones((ntest, 1), dtype = numpy.float32)])
 
@@ -157,7 +148,7 @@ else:
   found_labels = numpy.argmax(scores, axis = 0)
   
   # any more elegant way of expressing this welcome
-  test_accuracy = (found_labels == Ltest.T).sum() / float(ntest)
+  test_accuracy = sum([1 for i in (found_labels == Ltest.T)[0] if i]) / float(ntest)
   
   print "classification score on test: ", test_accuracy
   

@@ -1,32 +1,15 @@
 #ifndef X_MATRIX_H_INCLUDED
 #define X_MATRIX_H_INCLUDED
 
-/*******************************************************************
- * The matrix of training vectors is a x_matrix_t structure, because
- * it is not necessarily a dense matrix. Several encodings are used
- * for x_matrix_t's (see below).
- *
- * The main operations used during learning are: 
- * 
- * - x_matrix_dotprod: compute w * x(:, i) 
- * 
- * - x_matrix_addto: w += alpha * x(:, i) 
- */
-
-
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 /*******************************************************************
  * operations on x_matrix_t 
  *
  * handle different encodings of training examples x. 
  * 
  */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
 
 #ifndef sparse_index_t 
 #define sparse_index_t int
@@ -35,10 +18,10 @@ extern "C" {
 
 typedef struct {
   enum {
-    JSGD_X_FULL,        /* plain dense matrix */
-    JSGD_X_SPARSE,      /* sparse matrix */
-    JSGD_X_PQ,          /* PQ-encoded matrix */
-    JSGD_X_PQ_SPARSE,   /* Xerox-style sparse PQ (not implemented) */
+    JSGD_X_FULL, 
+    JSGD_X_SPARSE, 
+    JSGD_X_PQ, 
+    JSGD_X_PQ_SPARSE, 
   } encoding; 
 
   long n;               /* number of vectors */
@@ -53,9 +36,9 @@ typedef struct {
   unsigned char *codes; /* size (nsq, n) */
 
   /* sparse matrix */
-  sparse_index_t *indices;      /* row indices */
-  sparse_index_t *indptr;       /* staring of each column in indices table */
-  sparse_data_t *sparse_data;   /* associated data */
+  sparse_index_t *indices;
+  sparse_index_t *indptr; 
+  sparse_data_t *sparse_data; 
 
   /* sparse PQ */
   int *vector_begin;
@@ -67,7 +50,7 @@ typedef struct {
 
 
 /*****************************************
- * simple vector operations on dense vectors (SSE accelerated when possible)
+ * simple vector operations (accelerated when possible)
  */
 
 /* w := w * fw */
@@ -108,7 +91,7 @@ double x_matrix_dotprod_self(const x_matrix_t *x,
                              long i, long j);
 
 /*****************************************
- * x_matrix - dense matrix multiplications (used for classification)
+ * x_matrix - dense matrix multiplications
  *
  * x(d, n) 
  * w(d, m)
@@ -151,13 +134,9 @@ void x_matrix_matmul_self(const x_matrix_t *x,
 
 
 
-/* Sparse matrix used in the "use_self_dotprods" implementation of
- * OVR. 
- *
- * The encoding mimics Matlab or scipy.sparse.csc_matrix matrices
- * (and JSGD_X_SPARSE x_matrix_t).
- *
- * See eg. http://www.mathworks.fr/help/techdoc/apiref/mxsetir.html
+/* Column-major sparse matrix.
+ * The encoding mimics Matlab or scipy.sparse.csc_matrix matrices. 
+ * http://www.mathworks.fr/help/techdoc/apiref/mxsetir.html
  */
 typedef struct {
   int m, n;   /* nb of rows and columns */

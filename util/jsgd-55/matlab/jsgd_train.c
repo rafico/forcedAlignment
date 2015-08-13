@@ -120,11 +120,6 @@ void mexFunction (int nlhs, mxArray *plhs[],
     else GETOPT(int, random_seed)
     else GETOPT(int, fixed_eta)
     else GETOPT(int, n_thread)
-    else GETOPT(double, temperature)
-    else GETOPT(double, rho)
-    else GETOPT(int, fine_tune_bias)
-    else GETOPT(double,bias_learning_rate)
-    
 
     else if(!strcmp(varname, "algo")) {
       char algoname[256];
@@ -135,28 +130,13 @@ void mexFunction (int nlhs, mxArray *plhs[],
       params.algo = 
         !strcasecmp(algoname, "ovr") ? JSGD_ALGO_OVR :
         !strcasecmp(algoname, "mul") ? JSGD_ALGO_MUL :
-	!strcasecmp(algoname, "mul2") ? JSGD_ALGO_MUL2 :
         !strcasecmp(algoname, "rnk") ? JSGD_ALGO_RNK :
         !strcasecmp(algoname, "war") ? JSGD_ALGO_WAR :
-	!strcasecmp(algoname, "log") ? JSGD_ALGO_LOG :
-	!strcasecmp(algoname, "stf") ? JSGD_ALGO_STF :
         -1;
-   
+      
       if (params.algo == -1) mexErrMsgTxt ("invalid algo name");      
 
-    } 
-    else if(!strcmp(varname, "avg")) {
-      char avgname[256];
-      if (mxGetClassID(prhs[i + 1]) != mxCHAR_CLASS || 
-          mxGetString (prhs[i + 1], avgname, 256) != 0)
-        mexErrMsgTxt ("invalid avg string");
-      params.avg = 
-	!strcasecmp(avgname, "none") ? JSGD_AVG_NONE :
-	!strcasecmp(avgname, "wgt") ? JSGD_AVG_WGT :
-	!strcasecmp(avgname, "opt") ? JSGD_AVG_OPT :
-	-1;
-    }    
-    else if(!strcmp(varname, "valid")) {
+    } else if(!strcmp(varname, "valid")) {
       
       mxArray_to_x_matrix(prhs[i+1], &valid); 
 
@@ -203,7 +183,6 @@ void mexFunction (int nlhs, mxArray *plhs[],
 
   /* output */          
   float *bias = mxMalloc(sizeof(float) * nclass); 
-  memset(bias,0,sizeof(float)*nclass);
   OUT_W = mxCreateNumericMatrix (d + 1, nclass, mxSINGLE_CLASS, mxREAL);
   float *w = mxGetData(OUT_W); 
 
@@ -229,7 +208,7 @@ void mexFunction (int nlhs, mxArray *plhs[],
 
   /* the call */
   jsgd_train(nclass, &x, labels_0, w, bias, &params); 
-
+   
   /* delicate operation: w was used with a different stride in jsgd,
      redo properly and interleave with bias */
   for(i = nclass - 1; i >= 0; i--) {

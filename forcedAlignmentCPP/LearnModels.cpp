@@ -14,6 +14,7 @@
 #include "PedroFeatures.h"
 #include "LearnModels.h"
 #include "LibLinearWrapper.h"
+#include "JsgdWrapper.h"
 
 using namespace boost::filesystem;
 using namespace cv;
@@ -294,10 +295,28 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 	NormalizeFeatures(trHOGs);
 	trHOGs.convertTo(trHOGs, CV_32F);
 		
-	Mat labels = Mat::ones(m_params.m_numTrWords + m_params.m_numNWords, 1, CV_32F)*-1;
-	labels.rowRange(0,m_params.m_numTrWords) = 1;
-
-	if (m_params.m_svmlib == "liblinear")
+	int numSamples = m_params.m_numTrWords + m_params.m_numNWords;
+	Mat labels = Mat::ones(numSamples, 1, CV_32F);
+	labels.rowRange(0,m_params.m_numTrWords) = 0;
+	
+	if (m_params.m_svmlib == "jsgd")
+	{
+		std::vector<int> randp;
+		randp.reserve(numSamples);
+		int n(0);
+		std::generate_n(std::back_inserter(randp), numSamples, [n]()mutable { return n++; });
+		std::shuffle(randp.begin(), randp.end(), gen);
+		Mat trHOGs_shuffled(trHOGs.size(), CV_32F);
+		Mat labels_shuffled(labels.size(), CV_32S);
+	
+		for (size_t i = 0; i < randp.size(); ++i)
+		{
+			trHOGs.row(randp[i]).copyTo(trHOGs_shuffled.row(i));
+			labels_shuffled.at<int>(i) = static_cast<int>(labels.at<float>(randp[i]));
+		}
+		JsgdWrapper::trainModel(labels_shuffled, trHOGs_shuffled, hs_model.weight);
+	}
+	else if (m_params.m_svmlib == "liblinear")
 	{
 		LibLinearWrapper ll;
 		ll.trainModel(labels, trHOGs, hs_model.weight);

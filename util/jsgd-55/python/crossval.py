@@ -39,8 +39,7 @@ class CrossvalOptimization:
       '_lambda': 1e-4, 
       'bias_term': 0.1, 
       'eta0': 0.1, 
-      'beta': 5,
-      "temperature":1}
+      'beta': 5}
     
     # additional parameters to jsgd_train
     self.constant_parameters = {
@@ -68,29 +67,23 @@ class CrossvalOptimization:
     # ranges for parameters in init_point
     self.ranges = {
       '_lambda': [0.0] + pow10range,
-      'bias_term': [0.0] + pow10range,
+      'bias_term': pow10range,
       'eta0': pow10range,
-      'beta': [b for b in [2,5,10,20,50,100,200,500] if b < self.nclass], 
-      'temperature': pow10range}
-
-       
+      'beta': [b for b in [2,5,10,20,50,100,200,500] if b < self.nclass] }
+    
     # all params can be changed after constructor
-
-  def get_fold(self, fold):
-    """ return the train and validation indices for a fold (in 0:nfold) """
-    
-    n = self.Xtrain.shape[0]
-
-    valid_i = fold + 3*numpy.arange((n-fold)/3)
-    train_i = numpy.ones((n),dtype=numpy.bool)
-    train_i[valid_i] = False
-    train_i = numpy.nonzero(train_i)[0]
-    
-    return train_i, valid_i
+         
 
   def eval_params(self, params, fold):
 
-    train_i, valid_i = self.get_fold(fold)
+    n = self.Xtrain.shape[0]
+
+    # prepare fold
+    i0 = fold * n / self.nfold
+    i1 = (fold + 1) * n / self.nfold
+    
+    valid_i = numpy.arange(i0, i1)
+    train_i = numpy.hstack([numpy.arange(0, i0), numpy.arange(i1, n)])
 
     ni = train_i.size
     kw = params.copy()
@@ -112,7 +105,6 @@ class CrossvalOptimization:
     new_params = self.params.copy()
     if name == None and pm == 0: return new_params
     curval = self.params[name]
-   
     r = self.ranges[name]
     i = r.index(curval)
     try: 

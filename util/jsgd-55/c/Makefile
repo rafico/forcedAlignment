@@ -22,7 +22,7 @@ test.o : test.cpp
 	g++ -c -o $@ $< $(CFLAGS)
 
 libjsgd.so: jsgd.o x_matrix.o
-	$(CXX) -shared $^ -o $@
+	$(CXX) -fopenmp -shared $^ -o $@
 
 test : libjsgd.so test.o
 	g++ -fopenmp /usr/lib64/libblas.so.3.4.2 $^ -o $@ 

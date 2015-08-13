@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include <omp.h>
-#include <emmintrin.h>
+#include <immintrin.h>
 
 #include "x_matrix.h"
 
@@ -10,7 +10,6 @@
 #define NEWA(type,n) (type*)malloc(sizeof(type)*(n))
 #define NEWAC(type,n) (type*)calloc(sizeof(type),(n))
 #define NEW(type) NEWA(type,1)
-
 
 
 // #define FASTCACHE
@@ -304,8 +303,8 @@ double x_matrix_dotprod_self(const x_matrix_t *x,
  * 
  *  -Dinteger=int or -Dinteger=long 
  *
- * on the compiler command line. This depends on the Blas
- * implementation used. */
+ * on the compiler command line. This depends on the used Blas
+ * implementation */
 
 int sgemm_ (char *transa, char *transb, integer * m, integer *
             n, integer * k, real * alpha, const real * a, integer * lda,

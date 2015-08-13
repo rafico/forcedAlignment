@@ -36,23 +36,16 @@ perm = numpy.random.permutation(n)
 Xtrain = Xtrain[perm, :]
 Ltrain = Ltrain[perm, :]
   
-n_epoch = 60
-
-
-def compute_accuracy(scores, y):
-  " can be used to compute another performance metric in Python "
-  n = y.size
-  found_labels = numpy.argmax(scores.T, axis = 0)
-  return (found_labels == y.T).sum() / float(n) 
+n_epoch = 6000
   
 W, stats = jsgd_train(Xtrain, Ltrain,
                       valid = Xtest,
                       valid_labels = Ltest,
-                      eval_freq = 10,
+                      eval_freq = n_epoch,
                       n_epoch = n_epoch,
+                      t_block = 4,
                       verbose = 2,                       
                       want_stats = True,
-                      # accuracy_function = compute_accuracy,
                       n_thread = 1)
 
 print "final classification score = ", stats.valid_accuracies[-1]
@@ -66,6 +59,7 @@ scores = numpy.dot(W, Xtest1.T)
 # label = max score 
 found_labels = numpy.argmax(scores, axis = 0)
 
-test_accuracy = (found_labels == Ltest.T).sum() / float(n)
+# any more elegant way of expressing this welcome
+test_accuracy = sum([1 for i in (found_labels == Ltest.T)[0] if i]) / float(n)
 
 print "classification score computed in Python: ", test_accuracy

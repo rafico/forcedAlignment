@@ -9,11 +9,11 @@ VPATH =  $(SRCDIR)
 
 # Additional headers and libraries directories
 LIBLINEAR_PATH = ../../util/liblinear-2.01
-JSGD_PATH = ../../util/jsgd-61/c
+JSGD_PATH = ../../util/jsgd-55/c
 
 CC = g++ 
 CXXFLAGS = -std=c++11 -Wall -I$(LIBLINEAR_PATH) -I$(JSGD_PATH)
-LDLIBS = -L/usr/local/lib/ -L/home/auser/forcedAlignment/util/jsgd-61/c
+LDLIBS = -L/usr/local/lib/ -L/home/auser/forcedAlignment/util/jsgd-55/c
 LDFLAGS = -fopenmp
 
 # Check if the configuration is Release or Debug
