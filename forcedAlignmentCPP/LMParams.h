@@ -15,7 +15,7 @@ struct LMParams
 		m_numTrWords((m_rangeX.size() / m_stepSize4PositiveExamples) * (m_rangeY.size() / m_stepSize4PositiveExamples)),
 		m_propNWords(64),
 		m_numNWords(m_numTrWords*m_propNWords),
-		m_svmlib("jsgd"),
+		m_svmlib("bl"),
 		m_dataset("SG"),
 		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
 		m_pathImages(m_datasetPath + "images/"),

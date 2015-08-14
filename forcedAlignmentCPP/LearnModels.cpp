@@ -161,8 +161,8 @@ void LearnModels::computeFeaturesDocs()
 	{
 		clog << "Computing features and labels of doc " << i << endl;
 		int bH, bW;
-		m_docs[i].m_features = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
-		m_docs[i].m_features.convertTo(m_docs[i].m_features, CV_32F);
+		Mat feat = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
+		feat.convertTo(m_docs[i].m_features, CV_32F);
 		m_docs[i].m_bH = bH;
 		m_docs[i].m_bW = bW;
 	}
@@ -250,7 +250,6 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 			}
 
 			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
-			//feat.convertTo(feat, CV_32F);
 			feat.reshape(1, 1).copyTo(trHOGs.row(ps++));
 		}
 	}
@@ -262,6 +261,7 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 	uint startPos = m_params.m_numTrWords;
 	
 	uint dim = m_params.m_dim;
+	size_t stepSize = hs_model.m_bW*dim;
 
 	for (uint id = 0; id < m_docs.size(); ++id)
 	{
@@ -283,9 +283,8 @@ void LearnModels::learnModel(const Doc& doc, const CharInstance& ci, HogSvmModel
 
 			for (size_t tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
 			{
-				size_t stepSize = hs_model.m_bW*dim;
 				size_t pos = (tmpby*BW + bx)*dim;
-				copy(flat + pos + i*stepSize, flat + pos + (i + 1)*stepSize, flat_trHOGs + i*stepSize);
+				copy(flat + pos, flat + pos + stepSize, flat_trHOGs + i*stepSize);
 			}
 			++startPos;
 		}
@@ -376,9 +375,9 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 			auto areaP = hs_model.m_newH*hs_model.m_newW;
 			for (uint i = 0; i < locW_.size(); ++i)
 			{
-				auto areaGT = relBoxes[i].height * relBoxes[i].width;
 				for (uint j = 0; j < relBoxes.size(); ++j)
 				{
+					auto areaGT = relBoxes[j].area();
 					double intArea = (locW_[i] & relBoxes[j]).area();
 					double denom = (areaGT + areaP) - intArea;
 					double overlap = intArea / denom;
