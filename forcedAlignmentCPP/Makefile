@@ -13,7 +13,7 @@ JSGD_PATH = ../../util/jsgd-55/c
 
 CC = g++ 
 CXXFLAGS = -std=c++11 -Wall -I$(LIBLINEAR_PATH) -I$(JSGD_PATH)
-LDLIBS = -L/usr/local/lib/ -L/home/auser/forcedAlignment/util/jsgd-55/c
+LDLIBS = -L/usr/local/lib/ -L$(LIBLINEAR_PATH) -L$(JSGD_PATH)
 LDFLAGS = -fopenmp
 
 # Check if the configuration is Release or Debug
@@ -21,13 +21,13 @@ ifeq ($(CONFIGURATION),Debug)
 	CXXFLAGS += -g
 	LDLIBS += -g
 else
-	CXXFLAGS += -O3 -DNDEBUG#-funroll-loops -ffast-math -fexpensive-optimizations
+	CXXFLAGS += -O3 -DNDEBUG#-funroll-loops
 	LDLIBS += -O3
 	CONFIGURATION = Release
 endif
 
 LDLIBS +=  -lboost_system -lboost_filesystem -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml \
--lopencv_imgcodecs $(LIBLINEAR_PATH)/liblinear.so.3 -ljsgd /usr/lib64/libblas.so.3.4.2
+-lopencv_imgcodecs -llinear -ljsgd /usr/lib64/libblas.so.3.4.2
 
 ifeq ($(ATLAS),yes)
 	CXXFLAGS += -D_USE_ATLAS_
