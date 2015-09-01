@@ -11,26 +11,28 @@
 #include <numeric>
 #include <chrono>
 #include <algorithm>
+#include "JonAlmazan.h"
 #include "PedroFeatures.h"
 #include "LearnModels.h"
 #include "LibLinearWrapper.h"
-#include "JsgdWrapper.h"
+//#include "JsgdWrapper.h"
+
+//TODO: get rid of m_orig_img;
 
 using namespace boost::filesystem;
 using namespace cv;
 using namespace std;
 using namespace chrono;
 
-LearnModels::LearnModels()
-	: m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trChs(m_params)
+JonAlmazan::JonAlmazan()
+	: m_numRelevantWordsByClass(UCHAR_MAX + 1, 0)
 {
 	m_params.initDirs();
 	loadTrainingData();
-	m_trChs.computeNormalDistributionParams();
 	computeFeaturesDocs();
 }
 
-void LearnModels::loadTrainingData()
+void JonAlmazan::loadTrainingData()
 {
 	clog << "* Loading queries *" << endl;
 	clog << "* Computing queries *" << endl;
@@ -44,7 +46,7 @@ void LearnModels::loadTrainingData()
 		return;
 	}
 
-	uint globalIdx=0;
+	uint globalIdx = 0;
 
 	vector<path> vp; // store paths, so we can sort them later
 	copy(directory_iterator(dir_path), directory_iterator(), back_inserter(vp));
@@ -60,7 +62,7 @@ void LearnModels::loadTrainingData()
 			{
 				std::cerr << "Error: Unable to read models from " << itr.string() << std::endl;
 			}
-			
+
 			string fileName = itr.filename().stem().string();
 			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
 			cv::Mat image = cv::imread(fullFileName);
@@ -97,8 +99,6 @@ void LearnModels::loadTrainingData()
 				}
 				ci.m_classNum = classNum;
 				++m_numRelevantWordsByClass[classNum];
-				
-				m_trChs.addCharInstance(ci);
 			}
 			m_docs.push_back(Doc(image, charsVec.size(), move(charsVec), image.rows, image.cols, fullFileName));
 		}
@@ -106,7 +106,7 @@ void LearnModels::loadTrainingData()
 	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
 	m_numClasses = distance(m_numRelevantWordsByClass.begin(), iter);
 	m_numRelevantWordsByClass.resize(m_numClasses);
-	
+
 	m_params.m_numDocs = m_docs.size();
 	m_relevantBoxesByClass.resize(m_params.m_numDocs*m_numClasses);
 	for (size_t i = 0; i < m_params.m_numDocs; ++i)
@@ -123,7 +123,7 @@ void LearnModels::loadTrainingData()
 	m_params.m_numNWords = ceil((double)m_params.m_numNWords / m_params.m_numDocs)*m_params.m_numDocs;
 }
 
-void LearnModels::getImagesDocs()
+void JonAlmazan::getImagesDocs()
 {
 	clog << "* Getting images and resizing *" << endl;
 	for (auto& doc : m_docs)
@@ -146,7 +146,7 @@ void LearnModels::getImagesDocs()
 		uint padYend = difH - padYini;
 		uint padXini = difW / 2;
 		uint padXend = difW - padXini;
-		
+
 		const Mat &im = doc.m_origImage;
 		im(Range(padYini, im.rows - padYend), Range(padXini, im.cols - padXend)).copyTo(doc.m_image);
 		doc.m_yIni = padYini;
@@ -157,7 +157,7 @@ void LearnModels::getImagesDocs()
 }
 
 
-void LearnModels::computeFeaturesDocs()
+void JonAlmazan::computeFeaturesDocs()
 {
 	getImagesDocs();
 	for (size_t i = 0; i < m_docs.size(); ++i)
@@ -171,19 +171,7 @@ void LearnModels::computeFeaturesDocs()
 	}
 }
 
-void LearnModels::learnModels()
-{
-	const auto& t_chs = m_trChs.m_charInstances;
-	for (auto& ch : t_chs)
-	{
-		uchar asciiCode = ch.first;
-		HogSvmModel hogSvmModel(m_params.m_pathCharModels, asciiCode);
-		learnModel(asciiCode, hogSvmModel);
-		m_svmModels.insert({ asciiCode, move(hogSvmModel)});
-	}
-}
-
-void LearnModels::evaluateModels()
+void JonAlmazan::LearnModelsAndEvaluate()
 {
 	size_t index = 1;
 	char buffer[256];
@@ -194,17 +182,12 @@ void LearnModels::evaluateModels()
 		{
 			uint classNum = query.m_classNum;
 			uint nrelW = m_numRelevantWordsByClass[classNum];
-			
-			auto iter = m_svmModels.find(query.m_asciiCode);
-			if (iter == m_svmModels.end())
-			{
-				cerr << "SVM model for " << query.m_asciiCode << " not found" << endl;
-			}
-
+			HogSvmModel hogSvmModel(m_params.m_pathCharModels, query.m_asciiCode);
+			learnModel(query, hogSvmModel);
 			vector<double> scores;
 			vector<double> resultLabels;
 			vector<pair<Rect, size_t>> locWords;
-			evalModel(iter->second, classNum, scores, resultLabels, locWords);
+			evalModel(hogSvmModel, classNum, scores, resultLabels, locWords);
 			saveResultImages(doc, query, resultLabels, locWords);
 			double mAP, rec;
 			compute_mAP(resultLabels, nrelW, mAP, rec);
@@ -215,28 +198,27 @@ void LearnModels::evaluateModels()
 	}
 }
 
-void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
+void JonAlmazan::learnModel(const CharInstance& query, HogSvmModel &hs_model)
 {
-	if (hs_model.loadFromFile())
-	{
-		return;
-	}
-
 	uint pxbin = m_params.m_sbin;
 
-	const auto& chVec = m_trChs.getSamples(asciiCode);
-
-	int modelNew_H = round(m_trChs.getMeanHeight(asciiCode));
-	int modelNew_W = round(m_trChs.getMeanWidth(asciiCode));
+	// We expand the query to capture some context
+	Rect loc(query.m_loc.x - pxbin, query.m_loc.y - pxbin, query.m_loc.width + 2 * pxbin, query.m_loc.height + 2 * pxbin);
+	int modelNew_H = loc.height;
+	int modelNew_W = loc.width;
 
 	uint res;
 	while ((res = (modelNew_H % pxbin)))
 	{
 		modelNew_H -= res;
+		loc.height -= res;
+		loc.y += int(floor(double(res) / 2));
 	}
 	while ((res = (modelNew_W % pxbin)))
 	{
 		modelNew_W -= res;
+		loc.width -= res;
+		loc.x += int(floor(double(res) / 2));
 	}
 
 	hs_model.m_newH = modelNew_H;
@@ -245,19 +227,12 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 	hs_model.m_bW = modelNew_W / m_params.m_sbin - 2;
 	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
 
-	int numSamples = (m_params.m_numTrWords + m_params.m_numNWords)*chVec.size();
-	clog << "num of training samples for " << asciiCode << ": " << numSamples << endl;
-	Mat trHOGs = Mat::zeros(numSamples, descsz, CV_32F);
-	uint position = 0;
-	
-	for (const auto& ci : chVec)
-	{
-		// We expand the query to capture some context
-		Rect loc(ci.m_loc.x - pxbin, ci.m_loc.y - pxbin, ci.m_loc.width + 2 * pxbin, ci.m_loc.height + 2 * pxbin);
-	
-		Mat imDoc = m_docs[ci.m_docNum].m_origImage;
-	
+	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_64F);
+
+	Mat imDoc = imread(query.m_pathIm);
+
 	// Get positive windows
+	uint ps = 0;
 	for (auto dx = m_params.m_rangeX.start; dx < m_params.m_rangeX.end; dx += m_params.m_stepSize4PositiveExamples)	{
 		for (auto dy = m_params.m_rangeY.start; dy < m_params.m_rangeY.end; dy += m_params.m_stepSize4PositiveExamples)	{
 			// Extract image patch
@@ -278,19 +253,16 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 			}
 
 			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
-				feat.convertTo(feat, CV_32F);
-				feat.reshape(1, 1).copyTo(trHOGs.row(position++));
-			}
+			feat.reshape(1, 1).copyTo(trHOGs.row(ps++));
 		}
 	}
-
-
 	// Get negative windows
 	random_device rd;
 	mt19937 gen(rd());
 
-	int wordsByDoc = (m_params.m_numNWords*chVec.size()) / m_params.m_numDocs;
-	
+	int wordsByDoc = m_params.m_numNWords / m_params.m_numDocs;
+	uint startPos = m_params.m_numTrWords;
+
 	uint dim = m_params.m_dim;
 	size_t stepSize = hs_model.m_bW*dim;
 
@@ -310,23 +282,25 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 
 			int by = byDis(gen);
 			int bx = bxDis(gen);
-			auto *flat_trHOGs = trHOGs.ptr<float>(position);
+			auto *flat_trHOGs = trHOGs.ptr<double>(startPos);
 
 			for (size_t tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
 			{
 				size_t pos = (tmpby*BW + bx)*dim;
 				copy(flat + pos, flat + pos + stepSize, flat_trHOGs + i*stepSize);
 			}
-			++position;
+			++startPos;
 		}
 	}
 
 	// Apply L2 - norm.
 	NormalizeFeatures(trHOGs);
-		
+	trHOGs.convertTo(trHOGs, CV_32F);
+
+	int numSamples = m_params.m_numTrWords + m_params.m_numNWords;
 	Mat labels = Mat::ones(numSamples, 1, CV_32F);
-	labels.rowRange(0, m_params.m_numTrWords*chVec.size()) = 0;
-	
+	labels.rowRange(0, m_params.m_numTrWords) = 0;
+
 	if (m_params.m_svmlib == "jsgd")
 	{
 		std::vector<int> randp;
@@ -336,7 +310,7 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 		std::shuffle(randp.begin(), randp.end(), gen);
 		Mat trHOGs_shuffled(trHOGs.size(), CV_32F);
 		Mat labels_shuffled(labels.size(), CV_32S);
-	
+
 		for (size_t i = 0; i < randp.size(); ++i)
 		{
 			trHOGs.row(randp[i]).copyTo(trHOGs_shuffled.row(i));
@@ -354,11 +328,9 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 		auto *ptr = trHOGs.ptr<float>(m_params.m_numTrWords / 2 - 1);
 		hs_model.weight.assign(ptr, ptr + trHOGs.cols);
 	}
-
-	hs_model.save2File();
 }
 
-void LearnModels::NormalizeFeatures(cv::Mat & features)
+void JonAlmazan::NormalizeFeatures(cv::Mat & features)
 {
 	Mat temp, rp;
 	for (int i = 0; i < features.rows; ++i)
@@ -366,13 +338,12 @@ void LearnModels::NormalizeFeatures(cv::Mat & features)
 		double rowNorm = norm(features.row(i));
 		if (rowNorm > 0)
 		{
-			features.row(i) = features.row(i) * (1/rowNorm);
+			features.row(i) = features.row(i) * (1 / rowNorm);
 		}
 	}
 }
 
-
-void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
+void JonAlmazan::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
 {
 	vector<double> scoresWindows;
 	vector<bool> resultsWindows;
@@ -384,15 +355,15 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 		vector<Rect> locW;
 		vector<double> scsW;
 		getWindows(doc, hs_model, scsW, locW);
-		
+
 		for_each(scsW.begin(), scsW.end(), [](double &scs){if (std::isnan(scs)) scs = -1; });
 
 		Mat I;
 		sortIdx(Mat(scsW), I, SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
-		I = I.rowRange(I.rows - m_params.m_thrWindows-1, I.rows);
+		I = I.rowRange(I.rows - m_params.m_thrWindows - 1, I.rows);
 		vector<int> pick = nms(I, locW, m_params.m_overlapnms);
 
-		Mat scsW_(1, int(pick.size()),CV_64F);
+		Mat scsW_(1, int(pick.size()), CV_64F);
 		vector<Rect> locW_(pick.size());
 		for (uint i = 0; i < pick.size(); ++i)
 		{
@@ -424,7 +395,7 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 		double *ptr_scsW = scsW_.ptr<double>(0);
 		scoresWindows.insert(scoresWindows.end(), ptr_scsW, ptr_scsW + scsW_.cols);
 		resultsWindows.insert(resultsWindows.end(), res.begin(), res.end());
-		for_each(locW_.begin(), locW_.end(), [&](const Rect& locW){locWindows.push_back(make_pair(locW,docNum)); });
+		for_each(locW_.begin(), locW_.end(), [&](const Rect& locW){locWindows.push_back(make_pair(locW, docNum)); });
 	}
 
 	Mat scoresIdx;
@@ -449,9 +420,9 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 	locWords.resize(lastPosElement + 1);
 }
 
-void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW)
+void JonAlmazan::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW)
 {
-	//TODO: optimize this function (try using GPU and/or flattening the Mat).
+	//TODO: optimize this function (try using GPU).
 
 	// Extracts all the possible patches from a document images and computes the
 	// score given the queried word model
@@ -461,7 +432,7 @@ void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector
 	float *flat = featDoc.ptr<float>(0);
 	auto bH = doc.m_bH;
 	auto bW = doc.m_bW;
-	auto nbinsH = hs_model.m_bH; 
+	auto nbinsH = hs_model.m_bH;
 	auto nbinsW = hs_model.m_bW;
 	auto dim = hs_model.weight.size() / (nbinsH*nbinsW);
 	auto numWindows = (bH - nbinsH + 1) * (bW - nbinsW + 1);
@@ -483,18 +454,18 @@ void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector
 				norm += inner_product(flat + pos, flat + pos + nbinsW*dim, flat + pos, .0);
 			}
 			scsW[k++] /= sqrt(norm);
-			locW.push_back(Rect(bx*m_params.m_sbin + doc.m_xIni, by*m_params.m_sbin + doc.m_yIni, (nbinsW+2)*m_params.m_sbin, (nbinsH+2)*m_params.m_sbin));
+			locW.push_back(Rect(bx*m_params.m_sbin + doc.m_xIni, by*m_params.m_sbin + doc.m_yIni, (nbinsW + 2)*m_params.m_sbin, (nbinsH + 2)*m_params.m_sbin));
 		}
 	}
 }
 
-vector<int> LearnModels::nms(Mat I, const vector<Rect>& X, double overlap)
+vector<int> JonAlmazan::nms(Mat I, const vector<Rect>& X, double overlap)
 {
 	int i, j;
 	int N = I.rows;
 
-	vector<int> used(N,0);
-	vector<int> pick(N,-1);
+	vector<int> used(N, 0);
+	vector<int> pick(N, -1);
 
 	int Npick = 0;
 	for (i = N - 1; i >= 0; i--)
@@ -518,9 +489,9 @@ vector<int> LearnModels::nms(Mat I, const vector<Rect>& X, double overlap)
 	return pick;
 }
 
-void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
+void JonAlmazan::saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
 {
-	string qPathString = m_params.m_pathResultsImages + to_string(query.m_globalIdx+1) + "/";
+	string qPathString = m_params.m_pathResultsImages + to_string(query.m_globalIdx + 1) + "/";
 	path p(qPathString);
 	if (!exists(p))
 	{
@@ -538,7 +509,7 @@ void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, co
 		Rect bb = locWords[i].first;
 		size_t docIdx = locWords[i].second;
 		Mat imDoc = m_docs[docIdx].m_origImage;
-		
+
 		auto x1 = max(bb.x, 0);
 		auto x2 = min(bb.x + bb.width, imDoc.cols - 1);
 		auto y1 = max(bb.y, 0);
@@ -549,7 +520,7 @@ void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, co
 	}
 }
 
-void LearnModels::compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec)
+void JonAlmazan::compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec)
 {
 	// Compute the mAP
 	vector<double> precAt(resultLabels.size());
@@ -563,3 +534,295 @@ void LearnModels::compute_mAP(const vector<double> &resultLabels, uint nrelW, do
 	mAP /= nrelW;
 	rec = sum / nrelW;
 }
+
+/*
+void LearnModels::samplePos(Mat & posLst, const cv::Size & size, const vector<ModelInstance>& miVec)
+{
+uint pxbin = m_params.m_sbin;
+uint position = 0;
+
+for (const auto& mi : miVec)
+{
+Mat image = m_trainingImages.at(mi.m_pathIm);
+
+// We expand the query to capture some context
+Rect loc(mi.m_loc.x - pxbin, mi.m_loc.y - pxbin, mi.m_loc.width + pxbin, mi.m_loc.height + pxbin);
+uint newH = loc.height;
+uint newW = loc.width;
+
+uint res;
+while (res = newH % pxbin)
+{
+newH -= res;
+loc.y += int(floor(double(res) / 2));
+loc.height -= int(ceil(double(res) / 2));
+}
+while (res = newW % pxbin)
+{
+newW -= res;
+loc.x += int(floor(double(res) / 2));
+loc.width -= int(ceil(double(res) / 2));
+}
+
+for (auto dx = m_params.m_rangeX.start; dx < m_params.m_rangeX.end; dx += m_params.m_stepSize4PositiveExamples)	{
+for (auto dy = m_params.m_rangeY.start; dy < m_params.m_rangeY.end; dy += m_params.m_stepSize4PositiveExamples)	{
+// Extract image patch
+auto x1 = max(loc.x + dx, 0);
+auto x2 = min(loc.x + loc.width + dx, image.cols - 1);
+auto y1 = max(loc.y + dy, 0);
+auto y2 = min(loc.y + loc.height + dy, image.rows - 1);
+Mat im = image(Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1));
+
+Mat posPatch;
+resize(im, posPatch, size);
+
+Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
+feat = feat.t();
+feat.convertTo(feat, CV_32F);
+feat.reshape(1, 1).copyTo(posLst.row(position++));
+}
+}
+}
+}
+
+
+void LearnModels::computeAverageWindowSize4Char()
+{
+for (const auto& modelInstances : m_modelInstances)
+{
+uchar asciiCode = modelInstances.first;
+const auto& miVec = modelInstances.second;
+
+double accHeight = 0;
+double accWidth = 0;
+for (const auto& instance : miVec)
+{
+accHeight += instance.m_loc.height - 1;
+accWidth += instance.m_loc.width - 1;
+}
+
+uint avgWidth = static_cast<uint>(round((accWidth / miVec.size()) / m_params.m_sbin))*m_params.m_sbin;
+uint avgHeight = static_cast<uint>(round((accHeight / miVec.size()) / m_params.m_sbin))*m_params.m_sbin;
+m_WindowSz.insert({ asciiCode, Size(avgWidth, avgHeight) });
+}
+}
+
+// currently implementing 1 vs all, need to try pairs
+void LearnModels::train()
+{
+Mat trainingNeg = imread("D:/Dropbox/Code/forcedAlignment/trainNeg.jpg");
+int h, w;
+Mat negHogFeatures = PedroFeatures::process(trainingNeg, m_params.m_sbin, &h, &w);
+negHogFeatures.convertTo(negHogFeatures, CV_32F);
+
+computeAverageWindowSize4Char();
+
+for (const auto& modelInstances : m_modelInstances)
+{
+uchar asciiCode = modelInstances.first;
+
+// Load the trained SVM.
+Ptr<ml::SVM> svm = ml::SVM::create();
+string fileName = m_params.m_svmModelsLocation + to_string(asciiCode) + ".yml";
+path dir_path(fileName, native);
+if (exists(dir_path))
+{
+svm = ml::StatModel::load<ml::SVM>(fileName);
+std::clog << "Loaded svm model for " << asciiCode << " from file." << endl;
+}
+else
+{
+Size windowSz = m_WindowSz.at(asciiCode);
+
+int modelH = windowSz.height / m_params.m_sbin;
+int modelW = windowSz.width / m_params.m_sbin;
+
+windowSz.width += 2 * m_params.m_sbin;
+windowSz.height += 2 * m_params.m_sbin;
+
+uint hogWindowDim = modelH * modelW * m_params.m_dim;
+size_t length = (m_params.m_propNWords + 1)*m_params.m_numTrWords*modelInstances.second.size();
+Mat features(int(length), hogWindowDim, CV_32F);
+
+size_t numPos = m_params.m_numTrWords*modelInstances.second.size();
+size_t numNeg = m_params.m_propNWords*numPos;
+
+std::clog << "Loading " << numPos << " positive examples : " << asciiCode << endl;
+samplePos(features, windowSz, modelInstances.second);
+std::clog << "Loading " << numNeg << " Negative examples : " << asciiCode << endl;
+sampleNeg(asciiCode, features, numPos, negHogFeatures, Size(w, h), Size(modelW, modelH), numNeg);
+
+// Apply L2 - norm.
+NormalizeFeatures(features);
+
+vector<int> labels;
+labels.assign(numPos, +1);
+labels.insert(labels.end(), numNeg, -1);
+
+trainSvm(svm, features, labels, asciiCode);
+}
+m_SVMModels.insert({ asciiCode, svm });
+}
+}
+
+void LearnModels::trainSvm(Ptr<ml::SVM> svm, const Mat& features, const vector<int> & labels, uchar asciiCode)
+{
+svm->setCoef0(0.0);
+svm->setDegree(3);
+svm->setTermCriteria(TermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 1000, 1e-3));
+svm->setGamma(0);
+svm->setKernel(ml::SVM::LINEAR);
+svm->setNu(0.5);
+svm->setP(0.1); // for EPSILON_SVR, epsilon in loss function?
+svm->setC(0.01); // From paper, soft classifier
+svm->setType(ml::SVM::EPS_SVR); // C_SVC; // EPSILON_SVR; // may be also NU_SVR; // do regression task
+svm->train(features, ml::ROW_SAMPLE, Mat(labels));
+clog << "...[done]" << endl;
+
+Mat result;
+svm->predict(features, result);
+double err = 0;
+//TODO: clean this (calcError ?).
+for (size_t i = 0; i < labels.size(); ++i)
+{
+bool labelSign = labels[i] >= 0;
+bool predictedSign = result.at<float>(i) >= 0;
+err += (labelSign != predictedSign);
+}
+clog << "Prediction on training set: " << 1- (err / labels.size()) << endl;
+
+//Ptr<ml::TrainData> trainData = cv::ml::TrainData::create(features, ml::ROW_SAMPLE, Mat(labels));
+//std::clog << "Start training...";
+//svm->setKernel(ml::SVM::LINEAR);
+//svm->trainAuto(trainData);
+//std::clog << "...[done]" << endl;
+
+
+string fileName = m_params.m_svmModelsLocation + to_string(asciiCode) + ".yml";
+svm->save(fileName);
+}
+
+void LearnModels::getSvmDetector(uchar asciiCode, Mat & sv, double &rho)
+{
+Ptr<ml::SVM> svm = m_SVMModels.at(asciiCode);
+
+// get the support vectors
+sv = svm->getSupportVectors();
+const int sv_total = sv.rows;
+// get the decision function
+Mat alpha, svidx;
+rho = svm->getDecisionFunction(0, alpha, svidx);
+
+CV_Assert(alpha.total() == 1 && svidx.total() == 1 && sv_total == 1);
+CV_Assert((alpha.type() == CV_64F && alpha.at<double>(0) == 1.) ||
+(alpha.type() == CV_32F && alpha.at<float>(0) == 1.f));
+CV_Assert(sv.type() == CV_32F);
+}
+
+void LearnModels::drawLocations(Mat &img, const vector<Rect> &locations, const Scalar &color)
+{
+for (auto loc : locations)
+{
+rectangle(img, loc, color, 2);
+}
+}
+
+void LearnModels::sampleNeg(uchar asciiCode, cv::Mat& features, size_t startPos, const Mat & negHogFeatures, cv::Size imageHogSz, cv::Size modelHogSz, size_t numOfExamples)
+{
+int modelH = modelHogSz.height*m_params.m_sbin;
+int modelW = modelHogSz.width*m_params.m_sbin;
+
+for (const auto& modelInstances : m_modelInstances)
+{
+//TODO: clean this ugliness later.
+if (numOfExamples <= 0)
+{
+break;
+}
+if (asciiCode == modelInstances.first)
+{
+continue;
+}
+
+for (const auto& mi : modelInstances.second)
+{
+Mat image = m_trainingImages.at(mi.m_pathIm);
+
+// We expand the query to capture some context
+Rect loc(mi.m_loc.x - m_params.m_sbin, mi.m_loc.y - m_params.m_sbin, mi.m_loc.width + m_params.m_sbin, mi.m_loc.height + m_params.m_sbin);
+
+uint newH = loc.height;
+uint newW = loc.width;
+
+Mat im = image(loc);
+
+Mat negPatch;
+resize(im, negPatch, Size((modelHogSz.width + 2)*m_params.m_sbin, (modelHogSz.height + 2)*m_params.m_sbin));
+
+Mat feat = PedroFeatures::process(negPatch, m_params.m_sbin);
+feat = feat.t();
+feat.convertTo(feat, CV_32F);
+feat.reshape(1, 1).copyTo(features.row(startPos++));
+
+if (--numOfExamples <= 0)
+{
+break;
+}
+}
+}
+
+
+// Pick a random starting cell
+random_device rd;
+mt19937 gen(rd());
+
+uniform_int_distribution<> byDis(0, imageHogSz.height - modelHogSz.height - 1);
+uniform_int_distribution<> bxDis(0, imageHogSz.width - modelHogSz.width - 1);
+
+uint hogDim = m_params.m_dim;
+
+for (; startPos < features.rows; ++startPos)
+{
+int by = byDis(gen);
+int bx = bxDis(gen);
+for (int tmpby = by, i = 0; tmpby < by + modelHogSz.height; ++tmpby, ++i)
+{
+auto sp = tmpby*imageHogSz.width + bx;
+Mat temp = negHogFeatures(Range::all(), Range(sp, sp + modelHogSz.width)).t();
+temp = temp.reshape(1, 1);
+Mat aux = features.colRange(i*modelHogSz.width * hogDim, (i + 1)*modelHogSz.width * hogDim).rowRange(int(startPos), int(startPos + 1));
+temp.copyTo(aux);
+}
+}
+}
+
+void LearnModels::NormalizeFeatures(cv::Mat & features)
+{
+Mat temp, rp;
+for (int i = 0; i < features.rows; ++i)
+{
+double rowNorm = 1 / norm(features.row(i));
+features.row(i) = features.row(i) * rowNorm;
+}
+}
+
+
+cv::Size LearnModels::getHOGWindowSz(uchar asciiCode)
+{
+cv::Size sz = m_WindowSz.at(asciiCode);
+return Size(sz.width / m_params.m_sbin, sz.height / m_params.m_sbin);
+};
+*/
+
+/*
+auto &mi_vec = m_modelInstances.find(mi.m_asciiCode);
+if (mi_vec != m_modelInstances.end())
+{
+mi_vec->second.push_back(mi);
+}
+else
+{
+std::vector<ModelInstance> vec = { mi };
+m_modelInstances.insert({ mi.m_asciiCode, vec });
+}
+}*/

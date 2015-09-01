@@ -6,7 +6,7 @@ using namespace boost::filesystem;
 
 void LMParams::initDirs()
 {
-	vector<const string*> dirs = { &m_pathData, &m_pathResultsParent, &m_pathResults, &m_pathResultsImages};
+	vector<const string*> dirs = { &m_pathData, &m_pathResultsParent, &m_pathResults, &m_pathResultsImages, &m_pathCharModels };
 
 	for (auto d : dirs)
 	{

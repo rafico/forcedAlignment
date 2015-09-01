@@ -4,8 +4,8 @@
 // Threshold  Ascii_code X Y W H
 // This is Matlab based indexing (starts from 1).
 
-CharInstance::CharInstance(const string &fileName, uint globalIdx, const string &csv_line)
-	: m_pathIm(fileName), m_globalIdx(globalIdx)
+CharInstance::CharInstance(const string &pathIm, size_t docNum, uint globalIdx, const string &csv_line)
+	: m_pathIm(pathIm), m_docNum(docNum), m_globalIdx(globalIdx)
 {
 	std::stringstream   lineStream(csv_line);
 	std::string         cell;

@@ -5,12 +5,20 @@
 
 struct HogSvmModel
 {
-	uint m_newH;
-	uint m_newW;
-	uint m_bH;
-	uint m_bW;
+	HogSvmModel(const string& pathCharModels, uchar asciiCode);
+
+	void save2File();
+	bool loadFromFile();
+
+	int m_newH;
+	int m_newW;
+	int m_bH;
+	int m_bW;
 	vector<float> weight;
 	double m_bias;
+
+	string m_fileName;
+
 };
 
 

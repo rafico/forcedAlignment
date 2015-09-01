@@ -13,9 +13,9 @@ struct LMParams
 		m_rangeY(Range(-10, 12)),
 		m_stepSize4PositiveExamples(2),
 		m_numTrWords((m_rangeX.size() / m_stepSize4PositiveExamples) * (m_rangeY.size() / m_stepSize4PositiveExamples)),
-		m_propNWords(64),
+		m_propNWords(16),
 		m_numNWords(m_numTrWords*m_propNWords),
-		m_svmlib("bl"),
+		m_svmlib("liblinear"),
 		m_dataset("SG"),
 		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
 		m_pathImages(m_datasetPath + "images/"),
@@ -24,6 +24,7 @@ struct LMParams
 		m_pathResultsParent(m_pathData + "results/"),
 		m_pathResults(m_pathResultsParent + m_dataset + "/"),
 		m_pathResultsImages(m_pathResults + "images/"),
+		m_pathCharModels(m_pathData + "charModels" + "_" + m_dataset + "_" + "sbin" + std::to_string(m_sbin) + "/"),
 		m_dim(31),
 		m_step(1),
 		m_thrWindows(2000),
@@ -51,6 +52,7 @@ struct LMParams
 	string m_pathResultsParent;
 	string m_pathResults;
 	string m_pathResultsImages;
+	string m_pathCharModels;
 	uint m_dim;
 	uint m_numDocs;
 	uint m_step;

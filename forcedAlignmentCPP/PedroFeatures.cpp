@@ -37,8 +37,6 @@ double vv[9] = { 0.0000,
 using namespace std;
 using namespace cv;
 
-//TODO: change layout to row-major result.
-
 // main function:
 // takes a double color image and a bin size 
 // returns HOG features

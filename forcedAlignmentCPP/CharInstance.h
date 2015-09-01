@@ -12,9 +12,10 @@ W, H - are the width and height coordinates of the bounding box
 */
 struct CharInstance
 {
-	CharInstance(const string &pathIm, uint globalIdx, const string &csv_line);
+	CharInstance(const string &pathIm, size_t docNum, uint globalIdx, const string &csv_line);
 
 	string m_pathIm;
+	size_t m_docNum;
 	uint m_globalIdx;
 
 	uchar m_threshold;

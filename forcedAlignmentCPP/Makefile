@@ -39,13 +39,14 @@ endif
 # Targets
 PROGRAMS = test
 all: $(PROGRAMS)
-test: test.o LearnModels.o LMParams.o CharInstance.o Doc.o PedroFeatures.o LibLinearWrapper.o JsgdWrapper.o
+test: test.o LearnModels.o LMParams.o CharInstance.o Doc.o PedroFeatures.o LibLinearWrapper.o JsgdWrapper.o TrainingChars.o HogSvmModel.o
 LearnModels.o : LearnModels.cpp LearnModels.h HogSvmModel.h
 CharInstance.o : CharInstance.cpp CharInstance.h commonTypes.h
 LMParams.o : LMParams.cpp LMParams.h commonTypes.h
 Doc.o : Doc.cpp Doc.h commonTypes.h
 PedroFeatures.o : PedroFeatures.cpp PedroFeatures.h commonTypes.h
-
+TrainingChars.o : TrainingChars.cpp commonTypes.h
+HogSvmModel.o : HogSvmModel.cpp commonTypes.h
 
 
 #----- Begin Boilerplate

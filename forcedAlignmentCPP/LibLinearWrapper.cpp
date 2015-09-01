@@ -3,8 +3,8 @@
 
 LibLinearWrapper::LibLinearWrapper()
 {
-	m_param.solver_type = L2R_L2LOSS_SVC;
-	//m_param.solver_type = L2R_L1LOSS_SVC_DUAL;
+	//m_param.solver_type = L2R_L2LOSS_SVC;
+	m_param.solver_type = L2R_L1LOSS_SVC_DUAL;
 	m_param.eps = 0.01;
 	m_param.C = 1;
 	m_param.nr_weight = 0;
