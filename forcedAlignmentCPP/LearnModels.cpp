@@ -11,7 +11,7 @@
 #include <numeric>
 #include <chrono>
 #include <algorithm>
-#include "PedroFeatures.h"
+#include "HogUtils.h"
 #include "LearnModels.h"
 #include "LibLinearWrapper.h"
 #include "JsgdWrapper.h"
@@ -21,13 +21,12 @@ using namespace cv;
 using namespace std;
 using namespace chrono;
 
-LearnModels::LearnModels()
-	: m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trChs(m_params)
+LearnModels::LearnModels(Params& params)
+	: m_params(params), m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trChs(m_params)
 {
 	m_params.initDirs();
 	loadTrainingData();
 	m_trChs.computeNormalDistributionParams();
-	computeFeaturesDocs();
 }
 
 void LearnModels::loadTrainingData()
@@ -63,13 +62,6 @@ void LearnModels::loadTrainingData()
 			
 			string fileName = itr.filename().stem().string();
 			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
-			cv::Mat image = cv::imread(fullFileName);
-
-			if (!image.data)
-			{
-				cerr << "Could not open or find the image " << fullFileName << std::endl;
-				return;
-			}
 
 			vector<CharInstance> charsVec;
 			std::string	line;
@@ -100,7 +92,7 @@ void LearnModels::loadTrainingData()
 				
 				m_trChs.addCharInstance(ci);
 			}
-			m_docs.push_back(Doc(image, charsVec.size(), move(charsVec), image.rows, image.cols, fullFileName));
+			m_docs.push_back(Doc(fullFileName, move(charsVec)));
 		}
 	}
 	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
@@ -123,62 +115,27 @@ void LearnModels::loadTrainingData()
 	m_params.m_numNWords = ceil((double)m_params.m_numNWords / m_params.m_numDocs)*m_params.m_numDocs;
 }
 
-void LearnModels::getImagesDocs()
-{
-	clog << "* Getting images and resizing *" << endl;
-	for (auto& doc : m_docs)
-	{
-		uint H = doc.m_H;
-		uint W = doc.m_W;
-		uint res;
-
-		while ((res = (H % m_params.m_sbin)))
-		{
-			H -= res;
-		}
-		while ((res = (W % m_params.m_sbin)))
-		{
-			W -= res;
-		}
-		uint difH = doc.m_H - H;
-		uint difW = doc.m_W - W;
-		uint padYini = difH / 2;
-		uint padYend = difH - padYini;
-		uint padXini = difW / 2;
-		uint padXend = difW - padXini;
-		
-		const Mat &im = doc.m_origImage;
-		im(Range(padYini, im.rows - padYend), Range(padXini, im.cols - padXend)).copyTo(doc.m_image);
-		doc.m_yIni = padYini;
-		doc.m_xIni = padXini;
-		doc.m_H = doc.m_image.rows;
-		doc.m_W = doc.m_image.cols;
-	}
-}
-
-
 void LearnModels::computeFeaturesDocs()
 {
-	getImagesDocs();
+	clog << "* Getting images and resizing *" << endl;
 	for (size_t i = 0; i < m_docs.size(); ++i)
 	{
-		clog << "Computing features and labels of doc " << i << endl;
-		int bH, bW;
-		Mat feat = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
-		feat.convertTo(m_docs[i].m_features, CV_32F);
-		m_docs[i].m_bH = bH;
-		m_docs[i].m_bW = bW;
-	}
-}
+		m_docs[i].resizeDoc(m_params.m_sbin);
 
+		clog << "Computing features and labels of doc: " << i << endl;
+		m_docs[i].computeFeatures(m_params.m_sbin);
+		}
+		}
+		
 void LearnModels::learnModels()
-{
+	{
+	//computeFeaturesDocs();
+
 	const auto& t_chs = m_trChs.m_charInstances;
 	for (auto& ch : t_chs)
 	{
 		uchar asciiCode = ch.first;
-		HogSvmModel hogSvmModel(m_params.m_pathCharModels, asciiCode);
-		learnModel(asciiCode, hogSvmModel);
+		HogSvmModel hogSvmModel = learnModel(asciiCode);
 		m_svmModels.insert({ asciiCode, move(hogSvmModel)});
 	}
 }
@@ -215,11 +172,13 @@ void LearnModels::evaluateModels()
 	}
 }
 
-void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
+HogSvmModel LearnModels::learnModel(uchar asciiCode)
 {
+	HogSvmModel hs_model(asciiCode, m_params.m_pathCharModels);
+
 	if (hs_model.loadFromFile())
 	{
-		return;
+		return hs_model;
 	}
 
 	uint pxbin = m_params.m_sbin;
@@ -277,7 +236,7 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 				im.copyTo(posPatch);
 			}
 
-			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
+				Mat feat = HogUtils::process(posPatch, m_params.m_sbin);
 				feat.convertTo(feat, CV_32F);
 				feat.reshape(1, 1).copyTo(trHOGs.row(position++));
 			}
@@ -356,6 +315,7 @@ void LearnModels::learnModel(uchar asciiCode, HogSvmModel &hs_model)
 	}
 
 	hs_model.save2File();
+	return hs_model;
 }
 
 void LearnModels::NormalizeFeatures(cv::Mat & features)
@@ -383,14 +343,12 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 		const Doc& doc = m_docs[docNum];
 		vector<Rect> locW;
 		vector<double> scsW;
-		getWindows(doc, hs_model, scsW, locW);
-		
-		for_each(scsW.begin(), scsW.end(), [](double &scs){if (std::isnan(scs)) scs = -1; });
+		HogUtils::getWindows(doc, hs_model, scsW, locW, m_params.m_step, m_params.m_sbin);
 
 		Mat I;
 		sortIdx(Mat(scsW), I, SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
 		I = I.rowRange(I.rows - m_params.m_thrWindows-1, I.rows);
-		vector<int> pick = nms(I, locW, m_params.m_overlapnms);
+		vector<int> pick = HogUtils::nms(I, locW, m_params.m_overlapnms);
 
 		Mat scsW_(1, int(pick.size()),CV_64F);
 		vector<Rect> locW_(pick.size());
@@ -447,75 +405,6 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 	scores.resize(lastPosElement + 1);
 	resultLabels.resize(lastPosElement + 1);
 	locWords.resize(lastPosElement + 1);
-}
-
-void LearnModels::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW)
-{
-	//TODO: optimize this function (try using GPU and/or flattening the Mat).
-
-	// Extracts all the possible patches from a document images and computes the
-	// score given the queried word model
-
-	Mat featDoc = doc.m_features;
-	CV_Assert(featDoc.isContinuous());
-	float *flat = featDoc.ptr<float>(0);
-	auto bH = doc.m_bH;
-	auto bW = doc.m_bW;
-	auto nbinsH = hs_model.m_bH; 
-	auto nbinsW = hs_model.m_bW;
-	auto dim = hs_model.weight.size() / (nbinsH*nbinsW);
-	auto numWindows = (bH - nbinsH + 1) * (bW - nbinsW + 1);
-	uint step = m_params.m_step;
-	scsW.resize(numWindows);
-
-	size_t k = 0;
-	for (size_t by = 0; by <= bH - nbinsH; by += step)
-	{
-		for (size_t bx = 0; bx <= bW - nbinsW; bx += step)
-		{
-			scsW[k] = 0;
-			double norm = 0;
-
-			for (size_t tmpby = by, i = 0; tmpby < by + nbinsH; ++tmpby, ++i)
-			{
-				size_t pos = (tmpby*bW + bx)*dim;
-				scsW[k] += inner_product(hs_model.weight.data() + i*nbinsW*dim, hs_model.weight.data() + (i + 1)*nbinsW*dim, flat + pos, .0);
-				norm += inner_product(flat + pos, flat + pos + nbinsW*dim, flat + pos, .0);
-			}
-			scsW[k++] /= sqrt(norm);
-			locW.push_back(Rect(bx*m_params.m_sbin + doc.m_xIni, by*m_params.m_sbin + doc.m_yIni, (nbinsW+2)*m_params.m_sbin, (nbinsH+2)*m_params.m_sbin));
-		}
-	}
-}
-
-vector<int> LearnModels::nms(Mat I, const vector<Rect>& X, double overlap)
-{
-	int i, j;
-	int N = I.rows;
-
-	vector<int> used(N,0);
-	vector<int> pick(N,-1);
-
-	int Npick = 0;
-	for (i = N - 1; i >= 0; i--)
-	{
-		if (!used[i])
-		{
-			used[i] = 1;
-			pick[Npick++] = I.at<int>(i);
-			for (j = 0; j < i; ++j)
-			{
-				const Rect& r_i = X[I.at<int>(i)];
-				const Rect& r_j = X[I.at<int>(j)];
-				if (!used[j] && (double((r_i & r_j).area()) / r_j.area()) >= overlap)
-				{
-					used[j] = 1;
-				}
-			}
-		}
-	}
-	pick.resize(Npick);
-	return pick;
 }
 
 void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)

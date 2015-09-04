@@ -12,7 +12,7 @@
 #include <chrono>
 #include <algorithm>
 #include "JonAlmazan.h"
-#include "PedroFeatures.h"
+#include "HogUtils.h"
 #include "LearnModels.h"
 #include "LibLinearWrapper.h"
 //#include "JsgdWrapper.h"
@@ -65,13 +65,6 @@ void JonAlmazan::loadTrainingData()
 
 			string fileName = itr.filename().stem().string();
 			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
-			cv::Mat image = cv::imread(fullFileName);
-
-			if (!image.data)
-			{
-				cerr << "Could not open or find the image " << fullFileName << std::endl;
-				return;
-			}
 
 			vector<CharInstance> charsVec;
 			std::string	line;
@@ -100,7 +93,7 @@ void JonAlmazan::loadTrainingData()
 				ci.m_classNum = classNum;
 				++m_numRelevantWordsByClass[classNum];
 			}
-			m_docs.push_back(Doc(image, charsVec.size(), move(charsVec), image.rows, image.cols, fullFileName));
+			m_docs.push_back(Doc(fullFileName, move(charsVec)));
 		}
 	}
 	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
@@ -164,7 +157,7 @@ void JonAlmazan::computeFeaturesDocs()
 	{
 		clog << "Computing features and labels of doc " << i << endl;
 		int bH, bW;
-		Mat feat = PedroFeatures::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
+		Mat feat = HogUtils::process(m_docs[i].m_image, m_params.m_sbin, &bH, &bW);
 		feat.convertTo(m_docs[i].m_features, CV_32F);
 		m_docs[i].m_bH = bH;
 		m_docs[i].m_bW = bW;
@@ -182,7 +175,7 @@ void JonAlmazan::LearnModelsAndEvaluate()
 		{
 			uint classNum = query.m_classNum;
 			uint nrelW = m_numRelevantWordsByClass[classNum];
-			HogSvmModel hogSvmModel(m_params.m_pathCharModels, query.m_asciiCode);
+			HogSvmModel hogSvmModel(query.m_asciiCode, m_params.m_pathCharModels);
 			learnModel(query, hogSvmModel);
 			vector<double> scores;
 			vector<double> resultLabels;
@@ -252,7 +245,7 @@ void JonAlmazan::learnModel(const CharInstance& query, HogSvmModel &hs_model)
 				im.copyTo(posPatch);
 			}
 
-			Mat feat = PedroFeatures::process(posPatch, m_params.m_sbin);
+			Mat feat = HogUtils::process(posPatch, m_params.m_sbin);
 			feat.reshape(1, 1).copyTo(trHOGs.row(ps++));
 		}
 	}

@@ -6,7 +6,7 @@
 #include <opencv2/ml/ml.hpp>
 #include <opencv2/objdetect.hpp>
 #include "commonTypes.h"
-#include "LMParams.h"
+#include "Params.h"
 #include "CharInstance.h"
 #include "Doc.h"
 #include "HogSvmModel.h"
@@ -50,7 +50,7 @@ private:
 	unordered_map<uchar, Size> m_WindowSz;
 	unordered_map<uchar, uint> m_classes;
 
-	LMParams m_params;
+	Params m_params;
 
 };
 #endif // !_H_JON_ALMAZAN_H__

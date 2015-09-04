@@ -1,7 +1,7 @@
 #include <numeric>
 #include "TrainingChars.h"
 
-TrainingChars::TrainingChars(const LMParams& params)
+TrainingChars::TrainingChars(const Params& params)
 	: m_params(params)
 {}
 

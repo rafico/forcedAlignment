@@ -2,10 +2,10 @@
 #include "HogSvmModel.h"
 #include <string>
 
-HogSvmModel::HogSvmModel(const string& pathCharModels, uchar asciiCode)
-: m_fileName(pathCharModels + char(asciiCode) + "_" + std::to_string(asciiCode)+".yml")
+HogSvmModel::HogSvmModel(uchar asciiCode, const string& pathCharModels /* = "" */)
+	: m_asciiCode(asciiCode),
+	m_fileName(pathCharModels + char(asciiCode) + "_" + std::to_string(asciiCode)+".yml")
 {}
-
 
 void HogSvmModel::save2File()
 {

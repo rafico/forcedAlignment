@@ -3,7 +3,7 @@
 
 #include "commonTypes.h"
 #include "CharInstance.h"
-#include "LMParams.h"
+#include "Params.h"
 
 //TODO: equip with an iterator.
 
@@ -20,7 +20,7 @@ using TrainingCharsCont = unordered_map<uchar, TrainingCharsHelper>;
 
 struct TrainingChars
 {
-	TrainingChars(const LMParams& params);
+	TrainingChars(const Params& params);
 
 	void addCharInstance(const CharInstance& ci);
 	const vector<CharInstance>& getSamples(uint asciiCode);
@@ -30,7 +30,7 @@ struct TrainingChars
 	void computeNormalDistributionParams();
 
 	TrainingCharsCont m_charInstances;
-	const LMParams& m_params;
+	const Params& m_params;
 };
 
 #endif // !_H_TRAINING_CHARS_H__
