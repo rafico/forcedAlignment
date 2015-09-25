@@ -3,10 +3,11 @@
 
 #include "commonTypes.h"
 
-
 //TODO: replace hard-coded params with an xml or ini file.
 struct Params
 {
+
+private:
 	Params()
 		: m_sbin(6),
 		m_rangeX(Range(-4, 6)),
@@ -42,6 +43,20 @@ struct Params
 	}
 
 	void initDirs();
+
+	Params(const Params&) = delete;
+	Params(const Params&&) = delete;
+	Params& operator=(const Params&) = delete;
+	Params& operator=(const Params&&) = delete;
+
+public:
+	
+	static Params& getInstance()
+	{
+		static Params instance; // Guaranteed to be destroyed.
+		// Instantiated on first use.
+		return instance;
+	}
 
 	//cell size.
 	uint m_sbin;

@@ -1,5 +1,6 @@
 #include "LibLinearWrapper.h"
-
+#include <algorithm>
+#include <numeric>
 
 LibLinearWrapper::LibLinearWrapper()
 {
@@ -60,9 +61,9 @@ void LibLinearWrapper::trainModel(Mat labels, Mat trainingData, vector<float>& w
 		return;
 	}
 	struct model *model_ = train(&m_prob, &m_param);
+	double norm = std::inner_product(model_->w, model_->w + model_->nr_feature, model_->w, 0.0);
+	norm = sqrt(norm);
+
 	weight.resize(model_->nr_feature);
-	for (size_t i = 0; i < weight.size(); ++i)
-	{
-		weight[i] = static_cast<float>(model_->w[i]);
-	}
+	transform(model_->w, model_->w + model_->nr_feature, weight.begin(), [norm](double val){return val / norm; });
 }

@@ -2,36 +2,29 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
-#include "LearnModels.h"
-#include "JonAlmazan.h"
+#include "CharClassifier.h"
 #include "Classifier.h"
 #include "Dataset.h"
+#include "ForcedAlignmentTrain.h"
+#include "Doc.h"
 
 using namespace std;
 using namespace cv;
 
-
 int main(int argc, char** argv)
 {
-	Params params;
-
-	Dataset ds(params);
 	
-	AnnotatedLine x;
-	StartTimeSequence y;
+	//Doc doc;
+	//doc.loadXml("D:/Dropbox/PhD/datasets/SG/ground_truth/csg562-005.xml");
 
-	ds.read(x, y);
-	/*
-	LearnModels lm;
-	lm.learnModels();
-	lm.evaluateModels();
-	*/
+	//cout << doc;
 
-	//Classifier cls;
-	//cls.loadLine("D:/Dropbox/PhD/datasets/SG/data/line_images/csg562-003-01.png");
+	//ForcedAlignmentTrain::train();
 
-	//JonAlmazan ja;
-	//ja.LearnModelsAndEvaluate();
+	CharClassifier cc;
+	//cc.learnModels();
+	cc.evaluateModels(false);
+	int x = 2;
 
 	cout << "Press any key to continue.";
 	getchar();

@@ -10,12 +10,9 @@ Purpose:  Defines the data structs of instance and label
 #include <cstdlib>
 #include <fstream>
 #include <vector>
-#include <map>
-#include "Doc.h"
-#include "commonTypes.h"
-#include "Params.h"
+#include <unordered_map>
+#include "CharClassifier.h"
 
-#define MAX_LINE_SIZE 4096
 
 class IntVector : public std::vector<int> {
 public:
@@ -47,30 +44,8 @@ std::ostream& operator<< (std::ostream& os, const IntVector& v);
 
 /***********************************************************************/
 
-class StringVector : public std::vector<std::string> {
-public:
 
-	unsigned int read(const std::string &filename) {
-		std::ifstream ifs;
-		char line[MAX_LINE_SIZE];
-		ifs.open(filename.c_str());
-		if (!ifs.is_open()) {
-			std::cerr << "Unable to open file list:" << filename << std::endl;
-			return 0;
-		}
-		while (!ifs.eof()) {
-			ifs.getline(line, MAX_LINE_SIZE);
-			if (strcmp(line, ""))
-				push_back(std::string(line));
-		}
-		ifs.close();
-		return size();
-	}
-};
-
-/***********************************************************************/
-
-class CharSequence : public vector<int>
+class CharSequence : public vector<uchar>
 {
 public:
 	void from_string(const string &char_string);
@@ -84,10 +59,7 @@ std::ostream& operator<< (std::ostream& os, const CharSequence& y);
 /***********************************************************************/
 
 class StartTimeSequence : public std::vector<int>
-{
-public:
-	uint read(std::string &line);
-};
+{};
 
 std::ostream& operator<< (std::ostream& os, const StartTimeSequence& y);
 
@@ -102,7 +74,21 @@ struct AnnotatedLine : Doc
 		: Doc(pathLine)
 	{}
 
-	CharSequence m_char_seq;
+	double returnScore(uchar asciiCode, int cellStart, int cellEnd);
+
+	struct scoresType
+	{
+		vector<Rect> m_locW;
+		vector<double> m_scsW;
+		HogSvmModel m_hs_model;
+		
+		// for debugging.
+		Mat scoreVis;
+	};
+
+	unordered_map<uchar, scoresType> m_scores;
+
+	CharSequence m_chars;
 };
 
 /***********************************************************************/
@@ -110,29 +96,40 @@ struct AnnotatedLine : Doc
 class Dataset
 {
 public:
-	Dataset(const Params& params);
-	unsigned int read(AnnotatedLine &x, StartTimeSequence &y);
+	Dataset(CharClassifier& lm);
+	void read(AnnotatedLine &x, StartTimeSequence &y);
 	unsigned long size() { return m_start_times_file.size(); }
+
+	void loadTrainingData();
+	const vector<Doc>& getTrDocs(){ return m_trainingDocs; }
 
 private:
 
 	struct Example
 	{
-		string lineId;
 		AnnotatedLine m_line;
 		StartTimeSequence m_time_seq;
 	};
 
 	void parseFiles();
+	void loadImageAndcomputeScores(AnnotatedLine &x);
+	
+	StringVector m_training_file_list;
+	StringVector m_validation_file_list;
 
 	StringVector m_transcription_file;
 	StringVector m_start_times_file;
 	int m_current_line;
 
-	vector<Example> m_examples;
+	unordered_map<string, Example> m_examples;
+	vector<string> m_lineIds;
 
 	bool m_isParsed = false;
-	const Params& m_params;
+	Params &m_params;
+	CharClassifier &m_lm;
+
+	vector<Doc> m_trainingDocs;
+	vector<Doc> m_validationDocs;
 };
 
 

@@ -14,11 +14,14 @@ PhonemeSequence --> CharSequence
 #include <fstream>
 #include <iterator>
 #include <stdio.h>
+#include <algorithm>
+#include <opencv2/core.hpp>
 #include "Dataset.h"
+#include "HogUtils.h"
 
 using namespace std;
 
-// PhonemeSequence static memebers definitions
+// CharSequence static memebers definitions
 unsigned int CharSequence::m_num_chars;
 
 
@@ -32,18 +35,39 @@ Comments:     none.
 ***********************************************************************/
 void CharSequence::from_string(const string &transcript)
 {
+	string buffer;
 	for (size_t i = 0; i < transcript.size(); ++i)
 	{
-		switch (transcript[i])
+		char ch = transcript[i];
+		switch (ch)
 		{
 			case '-':
-				 continue;
 			case '|':
-				push_back(' ');
+				if (buffer == "et")
+				{
+					push_back('&');
+				}
+				// we are ignoring punctuation marks
+				else if (buffer == "pt")
+				{}
+				else
+				{
+					push_back(buffer[0]);
+				}
+				// Currently we ignore the space between consecutive words.
+				/*
+				if (transcript[i] == '|')
+				{
+					push_back('|');
+				}
+				*/
+				buffer.clear();
+				break;
 			default:
-				push_back(transcript[i]);
+				buffer.push_back(ch);
 		}
 	}
+	push_back(buffer[0]);
 }
 
 
@@ -61,30 +85,6 @@ std::ostream& operator<< (std::ostream& os, const CharSequence& y)
 		os << y[i] << " ";
 
 	return os;
-}
-
-uint StartTimeSequence::read(std::string &line)
-{
-	std::stringstream ss;
-	/*
-	std::ifstream ifs(filename.c_str());
-	// check input file stream
-	if (!ifs.good()) {
-		std::cerr << "Error: Unable to read StartTimeSequence from " << filename << std::endl;
-		exit(-1);
-	}
-	// delete the vector
-	clear();
-	// read size from the stream
-	while (ifs.good()) {
-		std::string value;
-		ifs >> value;
-		if (value == "") break;
-		push_back(int(std::atoi(value.c_str())));
-	}
-	ifs.close();
-	*/
-	return size();
 }
 
 /************************************************************************
@@ -111,10 +111,14 @@ Inputs:       std::string dataset_filename
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-Dataset::Dataset(const Params& params)
-	: m_params(params), m_current_line(0)
+Dataset::Dataset(CharClassifier& lm)
+	: m_params(Params::getInstance()), m_lm(lm), m_current_line(0)
 {
 	// Read list of files into StringVector
+	m_training_file_list.read(m_params.m_pathTrainingFiles);
+	m_validation_file_list.read(m_params.m_pathValidationFiles);
+
+	// reading file content into StringVector
 	m_transcription_file.read(m_params.m_pathTranscription);
 	m_start_times_file.read(m_params.m_pathStartTime);
 }
@@ -124,24 +128,66 @@ Dataset::Dataset(const Params& params)
 Function:     Dataset::read
 
 Description:  Read next instance and label
-Inputs:       SpeechUtterance&
-StartTimeSequence&
+Inputs:       AnnotatedLine&, StartTimeSequence&
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-uint Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
+void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 {
 	if (!m_isParsed)
 	{
 		parseFiles();
 	}
 
-	string start_time_seq_line = m_start_times_file[m_current_line];
-	string trascript_line = m_transcription_file[m_current_line];
+	string lineId = m_lineIds[m_current_line++];
+	
+	auto& iter = (m_examples.find(lineId));
+	if (iter == m_examples.end())
+	{
+		cerr << "Could not find line: " << lineId << endl;
+	}
+	
+	x = iter->second.m_line;
+	y = iter->second.m_time_seq;
 
-	string lineId;
+	loadImageAndcomputeScores(x);
 
-	return 0;
+	int x_shift = x.m_xIni;
+	uint sbin = m_params.m_sbin;
+	transform(y.begin(), y.end(), y.begin(), [x_shift, sbin](int startTime){return floor(((double)startTime - x_shift) / sbin); });	
+}
+
+double AnnotatedLine::returnScore(uchar asciiCode, int startCell, int endCell)
+{
+	const HogSvmModel& hs_model = m_scores[asciiCode].m_hs_model;
+	const vector<Rect> &locW = m_scores[asciiCode].m_locW;
+	const vector<double> &scsW = m_scores[asciiCode].m_scsW;
+	const Mat& vis = m_scores[asciiCode].scoreVis;
+
+	double max_val = MISPAR_KATAN_MEOD;
+
+	int _endCell = min(max(endCell, startCell + hs_model.m_bW), m_bW);
+
+	Mat debug_im;
+
+	if (startCell >= 0)
+	{
+		debug_im = m_image.colRange(startCell * 6, _endCell * 6);
+
+		auto iter = find_if(locW.begin(), locW.end(), [startCell](const Rect& rect){return rect.x == startCell; });
+		if (iter != locW.end())
+		{
+			size_t index = distance(locW.begin(), iter);
+			for (; index < locW.size() && 
+				locW[index].x + hs_model.m_bW <= _endCell;
+				++index)
+			{
+				max_val = std::max(max_val, scsW[index]);
+			}
+		}
+	}
+	
+	return max_val;
 }
 
 std::ostream& operator<< (std::ostream& os, const IntVector& v)
@@ -165,20 +211,70 @@ void Dataset::parseFiles()
 		stringstream ssTranscription(m_transcription_file[index]);
 
 		ssStartTime >> lineId;
-		string temp;
-		ssTranscription >> temp;
-		if (!lineId.compare(temp))
+		string lindIdTranscription;
+		ssTranscription >> lindIdTranscription;
+		if (lineId.compare(lindIdTranscription))
 		{
-			cerr << "Transcript file and start_time file are not synchronized.";
+			cerr << "Transcript file and start_time file are not synchronized.\n";
 		}
-	
 		Example example;
+
 		example.m_time_seq.assign((istream_iterator<int>(ssStartTime)), (istream_iterator<int>()));
-		
-		ssTranscription >> temp;
-		example.m_line.m_char_seq.from_string(temp);
-		
-		int x = 2;
+
+		string transcriptionString;
+		ssTranscription >> transcriptionString;
+		example.m_line.m_chars.from_string(transcriptionString);
+
+		example.m_line.m_pathImage = m_params.m_pathLineImages + lineId + ".png";
+
+		m_examples.insert({lineId, example});
+		m_lineIds.push_back(lineId);
 	}
 	m_isParsed = true;
+}
+
+void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
+{
+	uint sbin = m_params.m_sbin;
+	x.Init(x.m_pathImage);
+	x.computeFeatures(sbin);
+
+	for (auto asciiCode : x.m_chars)
+	{
+		// Computing scores for this model over the line, then sorting the scores according to the abscissa (x coordinate).
+		if (x.m_scores.find(asciiCode) == x.m_scores.end())
+		{
+			AnnotatedLine::scoresType scores;
+			scores.m_hs_model = m_lm.learnModel(asciiCode);
+
+			vector<Rect> locW;
+			vector<double> scsW;
+			HogUtils::getWindows(x, scores.m_hs_model, scsW, locW, m_params.m_step, m_params.m_sbin, false);
+
+			vector<int> x_indices;
+			transform(locW.begin(), locW.end(), std::back_inserter(x_indices), [](Rect& locW) { return locW.x; });
+			Mat scoresIdx;
+			sortIdx(Mat(x_indices), scoresIdx, cv::SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
+
+			scores.m_locW.resize(x_indices.size());
+			scores.m_scsW.resize(x_indices.size());
+
+			for (size_t i = 0; i < x_indices.size(); ++i)
+			{
+				int index = scoresIdx.at<int>(i);
+				scores.m_locW[i] = locW[index];
+				scores.m_scsW[i] = scsW[index];
+			}
+
+			scores.scoreVis = Mat::zeros(x.m_bH, x.m_bW, CV_64F);
+			for (size_t i = 0; i < locW.size(); ++i)
+			{
+				int xInd = locW[i].x;
+				int yInd = locW[i].y;
+				scores.scoreVis.at<double>(yInd, xInd) = scsW[i];
+			}
+
+			x.m_scores.insert({ asciiCode, move(scores) });
+		}
+	}
 }

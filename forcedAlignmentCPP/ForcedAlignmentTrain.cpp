@@ -1,80 +1,83 @@
 #include "ForcedAlignmentTrain.h"
 #include "commonTypes.h"
+#include "Dataset.h"
+#include "Params.h"
+#include "Classifier.h"
+#include "CharClassifier.h"
 
-void static train()
+void ForcedAlignmentTrain::train()
 {
-	// phoneme symbol to number mapping (Lee and Hon, 89)
-	//PhonemeSequence::load_phoneme_map(phonemes_filename, silence_symbol);
+	string val_scores_filelist;
+	string classifier_filename;
+
+	double epsilon = 0;
+
+	const Params &params = Params::getInstance();
+	CharClassifier lm;
+	
+	uint max_char_legnth;
+	uint min_char_length;
+	lm.getMinMaxCharLength(max_char_legnth, min_char_length);
+
+	string loss_type = "alignment_loss";
 
 	// Initiate classifier
-	//Classifier classifier(frame_rate, min_phoneme_length, max_phoneme_length, C,
-	//	beta1, beta2, beta3, min_sqrt_gamma, loss_type);
-	// classifier.load_phoneme_stats(phoneme_stats_filename);
+	Classifier classifier(params.m_sbin, min_char_length, max_char_legnth, 0, loss_type);
+	classifier.load_char_stats(lm);
 
 	uint num_epochs = 1;
 
 	double loss;
 	double cum_loss = 0.0;
 	double best_validation_loss = 1e100;
-	/*
+
 	for (uint epoch = 0; epoch < num_epochs; ++epoch) {
 
-		// begining of the training set
-		//Dataset training_dataset(scores_filelist, dists_filelist, phonemes_filelist, start_times_filelist);
+		//beginning of the training set
+		Dataset training_dataset(lm);
 
 		double max_loss_in_epoch = 0.0; // maximal loss value in this epoch
 		double avg_loss_in_epoch = 0.0; // training loss value in this epoch
 
 		// Run over all dataset
-		for (uint i = 0; i < training_dataset.size(); i++) {
+		for (uint i = 0; i < training_dataset.size(); i++)
+		{
 
-			SpeechUtterance x;
+			AnnotatedLine x;
 			StartTimeSequence y;
 			StartTimeSequence y_hat;
-			StartTimeSequence y_hat_eps;
-
 
 			cout << "==================================================================================" << endl;
 
 			// read next example for dataset
-			training_dataset.read(x, y, remove_silence);
+			training_dataset.read(x, y);
 			y_hat.resize(y.size());
-			y_hat_eps.resize(y.size());
 
-			// predict label 
+			// predict label
 			classifier.predict(x, y_hat);
 
-			cout << "phonemes=" << x.phonemes << endl;
+			cout << "chars=" << x.m_chars << endl;
 			cout << "alignment= " << y << endl;
 			cout << "predicted= " << y_hat << endl;
 
-			if (epsilon > 0.0) {
-				classifier.predict_epsilon(x, y_hat_eps, y, epsilon);
-				cout << "eps-predicted= " << y_hat_eps << endl;
-			}
-
-			// suffer loss and update
-			if (epsilon > 0.0) {
-				loss = classifier.update_direct_loss(x, y_hat_eps, y_hat, y, epsilon);
-			}
-			else {
-				loss = classifier.update(x, y, y_hat);
-			}
+			loss = classifier.update(x, y, y_hat);
 			cum_loss += loss;
 
 			if (max_loss_in_epoch < loss) max_loss_in_epoch = loss;
 			avg_loss_in_epoch += loss;
 
+#ifdef USE_VALIDATION
 			// now, check the validations error
-			if (val_scores_filelist != "" && classifier.was_changed()) {
+			if (!val_scores_filelist.empty() && classifier.was_changed()) 
+			{
 				cout << "Validation...\n";
 				Dataset val_dataset(val_scores_filelist, val_dists_filelist, val_phonemes_filelist, val_start_times_filelist);
 				double this_w_loss = 0.0;
 				for (uint ii = 0; ii < val_dataset.size(); ++ii) {
-					SpeechUtterance xx;
+					AnnotatedLine xx;
 					StartTimeSequence yy;
 					StartTimeSequence yy_hat;
-					val_dataset.read(xx, yy, remove_silence, false);
+					val_dataset.read(xx, yy);
 					yy_hat.resize(yy.size());
 					classifier.predict(xx, yy_hat);
 					double this_loss = 0;
@@ -92,12 +95,8 @@ void static train()
 				}
 				cout << "i = " << i << ", this validation error = " << this_w_loss
 					<< ", best validation loss  = " << best_validation_loss << endl;
-
-				// stopping criterion for iterate until convergence
-				//        if (best_validation_loss < 1.0)
-				//          break;
 			}
-
+#endif
 		} // end running over the dataset
 
 		avg_loss_in_epoch /= training_dataset.size();
@@ -105,8 +104,13 @@ void static train()
 		cout << " average normalized loss = " << avg_loss_in_epoch
 			<< " best validation loss  = " << best_validation_loss << endl;
 	}
-	if (val_scores_filelist == "")
+
+#ifdef USE_VALIDATION
+	if (val_scores_filelist.empty())
+	{
 		classifier.save(classifier_filename);
-	*/
+	}
+#endif
+
 	cout << "Done." << endl;
 }

@@ -237,9 +237,18 @@ cv::Mat HogUtils::process(cv::Mat image, int sbin, int *h /*=0*/, int *w /*=0*/)
 
 // Extracts all the possible patches from a document images and computes the
 // score given the queried word model
-void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW, uint step, uint sbin)
+void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<double>& scsW, vector<Rect>& locW, uint step, uint sbin, bool padResult /* = true */)
 {
 	//TODO: optimize this function (try using GPU).
+
+	uint xIni = doc.m_xIni, yIni = doc.m_yIni;
+	uint widthPad = 2, heightPad = 2;
+	uint p_sbin = sbin;
+	if (!padResult)
+	{
+		xIni = yIni = widthPad = heightPad = 0;
+		p_sbin = 1;
+	}
 
 	Mat featDoc = doc.m_features;
 	CV_Assert(featDoc.isContinuous());
@@ -267,7 +276,7 @@ void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<do
 				norm += inner_product(flat + pos, flat + pos + nbinsW*dim, flat + pos, .0);
 			}
 			scsW[k++] /= sqrt(norm);
-			locW.push_back(Rect(bx*sbin + doc.m_xIni, by*sbin + doc.m_yIni, (nbinsW + 2)*sbin, (nbinsH + 2)*sbin));
+			locW.push_back(Rect(bx*p_sbin + xIni, by*p_sbin + yIni, (nbinsW + widthPad)*p_sbin, (nbinsH + heightPad)*p_sbin));
 		}
 	}
 

@@ -5,7 +5,7 @@
 
 struct HogSvmModel
 {
-
+	HogSvmModel() {};
 	HogSvmModel(uchar asciiCode, const string& pathCharModels = "");
 
 	void save2File();

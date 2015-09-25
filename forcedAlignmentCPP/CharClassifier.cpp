@@ -12,126 +12,45 @@
 #include <chrono>
 #include <algorithm>
 #include "HogUtils.h"
-#include "LearnModels.h"
+#include "CharClassifier.h"
 #include "LibLinearWrapper.h"
-#include "JsgdWrapper.h"
+#include "TrainingData.h"
+//#include "JsgdWrapper.h"
+
 
 using namespace boost::filesystem;
 using namespace cv;
 using namespace std;
 using namespace chrono;
 
-LearnModels::LearnModels(Params& params)
-	: m_params(params), m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trChs(m_params)
+CharClassifier::CharClassifier()
+	: m_params(Params::getInstance()), m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trData(m_params)
 {
-	m_params.initDirs();
 	loadTrainingData();
-	m_trChs.computeNormalDistributionParams();
+	m_trData.computeNormalDistributionParams();
+	computeFeaturesDocs();
 }
 
-void LearnModels::loadTrainingData()
+void CharClassifier::loadTrainingData()
 {
-	clog << "* Loading queries *" << endl;
-	clog << "* Computing queries *" << endl;
-	clog << "* Loading documents *" << endl;
-	clog << "* Initializing test documents *" << endl;
-
-	path dir_path(m_params.m_pathDocuments);
-	if (!exists(dir_path))
-	{
-		cerr << "Error: Unable to read models from " << m_params.m_pathDocuments << std::endl;
-		return;
-	}
-
-	uint globalIdx=0;
-
-	vector<path> vp; // store paths, so we can sort them later
-	copy(directory_iterator(dir_path), directory_iterator(), back_inserter(vp));
-	sort(vp.begin(), vp.end()); // sort, since directory iteration is not ordered on some file systems
-
-	for (const auto &itr : vp)
-	{
-		if (itr.extension() == ".csv")
-		{
-			cout << "Loading " << itr.filename() << endl;
-			std::ifstream str(itr.string());
-			if (!str.good())
-			{
-				std::cerr << "Error: Unable to read models from " << itr.string() << std::endl;
-			}
-			
-			string fileName = itr.filename().stem().string();
-			string fullFileName = m_params.m_pathImages + fileName + ".jpg";
-
-			vector<CharInstance> charsVec;
-			std::string	line;
-			while (std::getline(str, line))
-			{
-				charsVec.push_back(CharInstance(fullFileName, m_docs.size(), globalIdx, line));
-				auto &ci = charsVec.back();
-				if ('\0' == ci.m_asciiCode)
-				{
-					charsVec.pop_back();
-					continue;
-				}
-				++globalIdx;
-
-				uint classNum;
-				auto iter = m_classes.find(ci.m_asciiCode);
-				if (iter != m_classes.end())
-				{
-					classNum = iter->second;
-				}
-				else
-				{
-					classNum = uint(m_classes.size());
-					m_classes.insert({ ci.m_asciiCode, classNum });
-				}
-				ci.m_classNum = classNum;
-				++m_numRelevantWordsByClass[classNum];
-				
-				m_trChs.addCharInstance(ci);
-			}
-			m_docs.push_back(Doc(fullFileName, move(charsVec)));
-		}
-	}
-	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
-	m_numClasses = distance(m_numRelevantWordsByClass.begin(), iter);
-	m_numRelevantWordsByClass.resize(m_numClasses);
-	
-	m_params.m_numDocs = m_docs.size();
-	m_relevantBoxesByClass.resize(m_params.m_numDocs*m_numClasses);
-	for (size_t i = 0; i < m_params.m_numDocs; ++i)
-	{
-		const auto& chars = m_docs[i].m_chars;
-		for (const auto& ch : chars)
-		{
-			uint classNum = ch.m_classNum;
-			Rect loc = ch.m_loc;
-			size_t idx = i*m_numClasses + classNum;
-			m_relevantBoxesByClass[idx].push_back(loc);
-		}
-	}
-	m_params.m_numNWords = ceil((double)m_params.m_numNWords / m_params.m_numDocs)*m_params.m_numDocs;
+	m_docs = m_trData.m_trainingDocs;
+	m_numRelevantWordsByClass = m_trData.m_numRelevantWordsByClass;
+	m_relevantBoxesByClass = m_trData.m_relevantBoxesByClass;
+	m_numClasses = m_trData.m_numRelevantWordsByClass.size();
 }
 
-void LearnModels::computeFeaturesDocs()
+void CharClassifier::computeFeaturesDocs()
 {
-	clog << "* Getting images and resizing *" << endl;
 	for (size_t i = 0; i < m_docs.size(); ++i)
 	{
-		m_docs[i].resizeDoc(m_params.m_sbin);
-
 		clog << "Computing features and labels of doc: " << i << endl;
 		m_docs[i].computeFeatures(m_params.m_sbin);
-		}
-		}
-		
-void LearnModels::learnModels()
-	{
-	//computeFeaturesDocs();
+	}
+}
 
-	const auto& t_chs = m_trChs.m_charInstances;
+void CharClassifier::learnModels()
+{
+	const auto& t_chs = m_trData.m_charInstances;
 	for (auto& ch : t_chs)
 	{
 		uchar asciiCode = ch.first;
@@ -140,7 +59,7 @@ void LearnModels::learnModels()
 	}
 }
 
-void LearnModels::evaluateModels()
+void CharClassifier::evaluateModels(bool ExemplarModel/*  = true */)
 {
 	size_t index = 1;
 	char buffer[256];
@@ -149,19 +68,15 @@ void LearnModels::evaluateModels()
 	{
 		for (const auto& query : doc.m_chars)
 		{
-			uint classNum = query.m_classNum;
+			uint classNum = m_trData.getCharClass(query.m_asciiCode);
 			uint nrelW = m_numRelevantWordsByClass[classNum];
 			
-			auto iter = m_svmModels.find(query.m_asciiCode);
-			if (iter == m_svmModels.end())
-			{
-				cerr << "SVM model for " << query.m_asciiCode << " not found" << endl;
-			}
-
+			HogSvmModel hogSvmModel = ExemplarModel ? learnExemplarModel(doc, query) : learnModel(query.m_asciiCode);
+			
 			vector<double> scores;
 			vector<double> resultLabels;
 			vector<pair<Rect, size_t>> locWords;
-			evalModel(iter->second, classNum, scores, resultLabels, locWords);
+			evalModel(hogSvmModel, classNum, scores, resultLabels, locWords);
 			saveResultImages(doc, query, resultLabels, locWords);
 			double mAP, rec;
 			compute_mAP(resultLabels, nrelW, mAP, rec);
@@ -172,51 +87,8 @@ void LearnModels::evaluateModels()
 	}
 }
 
-HogSvmModel LearnModels::learnModel(uchar asciiCode)
+void CharClassifier::samplePos(const Mat &imDoc, Mat &trHOGs, size_t &position, const Rect &loc, Size sz)
 {
-	HogSvmModel hs_model(asciiCode, m_params.m_pathCharModels);
-
-	if (hs_model.loadFromFile())
-	{
-		return hs_model;
-	}
-
-	uint pxbin = m_params.m_sbin;
-
-	const auto& chVec = m_trChs.getSamples(asciiCode);
-
-	int modelNew_H = round(m_trChs.getMeanHeight(asciiCode));
-	int modelNew_W = round(m_trChs.getMeanWidth(asciiCode));
-
-	uint res;
-	while ((res = (modelNew_H % pxbin)))
-	{
-		modelNew_H -= res;
-	}
-	while ((res = (modelNew_W % pxbin)))
-	{
-		modelNew_W -= res;
-	}
-
-	hs_model.m_newH = modelNew_H;
-	hs_model.m_newW = modelNew_W;
-	hs_model.m_bH = modelNew_H / m_params.m_sbin - 2;
-	hs_model.m_bW = modelNew_W / m_params.m_sbin - 2;
-	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
-
-	int numSamples = (m_params.m_numTrWords + m_params.m_numNWords)*chVec.size();
-	clog << "num of training samples for " << asciiCode << ": " << numSamples << endl;
-	Mat trHOGs = Mat::zeros(numSamples, descsz, CV_32F);
-	uint position = 0;
-	
-	for (const auto& ci : chVec)
-	{
-		// We expand the query to capture some context
-		Rect loc(ci.m_loc.x - pxbin, ci.m_loc.y - pxbin, ci.m_loc.width + 2 * pxbin, ci.m_loc.height + 2 * pxbin);
-	
-		Mat imDoc = m_docs[ci.m_docNum].m_origImage;
-	
-	// Get positive windows
 	for (auto dx = m_params.m_rangeX.start; dx < m_params.m_rangeX.end; dx += m_params.m_stepSize4PositiveExamples)	{
 		for (auto dy = m_params.m_rangeY.start; dy < m_params.m_rangeY.end; dy += m_params.m_stepSize4PositiveExamples)	{
 			// Extract image patch
@@ -227,29 +99,27 @@ HogSvmModel LearnModels::learnModel(uchar asciiCode)
 			Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
 
 			Mat posPatch;
-			if (im.rows != modelNew_H || im.cols != modelNew_W)
+			if (im.rows != sz.height || im.cols != sz.width)
 			{
-				resize(im, posPatch, Size(modelNew_W, modelNew_H));
+				resize(im, posPatch, sz);
 			}
 			else
 			{
 				im.copyTo(posPatch);
 			}
 
-				Mat feat = HogUtils::process(posPatch, m_params.m_sbin);
-				feat.convertTo(feat, CV_32F);
-				feat.reshape(1, 1).copyTo(trHOGs.row(position++));
-			}
+			Mat feat = HogUtils::process(posPatch, m_params.m_sbin);
+			feat.convertTo(feat, CV_32F);
+			feat.reshape(1, 1).copyTo(trHOGs.row(position++));
 		}
 	}
+}
 
-
-	// Get negative windows
+void CharClassifier::sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, const HogSvmModel &hs_model)
+{
 	random_device rd;
 	mt19937 gen(rd());
 
-	int wordsByDoc = (m_params.m_numNWords*chVec.size()) / m_params.m_numDocs;
-	
 	uint dim = m_params.m_dim;
 	size_t stepSize = hs_model.m_bW*dim;
 
@@ -279,13 +149,16 @@ HogSvmModel LearnModels::learnModel(uchar asciiCode)
 			++position;
 		}
 	}
+}
 
-	// Apply L2 - norm.
-	NormalizeFeatures(trHOGs);
-		
+void CharClassifier::trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, size_t numSamples, size_t numTrWords)
+{
+	random_device rd;
+	mt19937 gen(rd());
+
 	Mat labels = Mat::ones(numSamples, 1, CV_32F);
-	labels.rowRange(0, m_params.m_numTrWords*chVec.size()) = 0;
-	
+	labels.rowRange(0, numTrWords) = 0;
+
 	if (m_params.m_svmlib == "jsgd")
 	{
 		std::vector<int> randp;
@@ -295,7 +168,7 @@ HogSvmModel LearnModels::learnModel(uchar asciiCode)
 		std::shuffle(randp.begin(), randp.end(), gen);
 		Mat trHOGs_shuffled(trHOGs.size(), CV_32F);
 		Mat labels_shuffled(labels.size(), CV_32S);
-	
+
 		for (size_t i = 0; i < randp.size(); ++i)
 		{
 			trHOGs.row(randp[i]).copyTo(trHOGs_shuffled.row(i));
@@ -310,15 +183,12 @@ HogSvmModel LearnModels::learnModel(uchar asciiCode)
 	}
 	else if (m_params.m_svmlib == "bl")
 	{
-		auto *ptr = trHOGs.ptr<float>(m_params.m_numTrWords / 2 - 1);
+		auto *ptr = trHOGs.ptr<float>(m_params.m_numTrWords / 2);
 		hs_model.weight.assign(ptr, ptr + trHOGs.cols);
 	}
-
-	hs_model.save2File();
-	return hs_model;
 }
 
-void LearnModels::NormalizeFeatures(cv::Mat & features)
+void CharClassifier::NormalizeFeatures(cv::Mat & features)
 {
 	Mat temp, rp;
 	for (int i = 0; i < features.rows; ++i)
@@ -326,13 +196,116 @@ void LearnModels::NormalizeFeatures(cv::Mat & features)
 		double rowNorm = norm(features.row(i));
 		if (rowNorm > 0)
 		{
-			features.row(i) = features.row(i) * (1/rowNorm);
+			features.row(i) = features.row(i) * (1 / rowNorm);
 		}
 	}
 }
 
+HogSvmModel CharClassifier::learnModel(uchar asciiCode)
+{
+	HogSvmModel hs_model(asciiCode, m_params.m_pathCharModels);
 
-void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
+	auto iter = m_svmModels.find(asciiCode);
+	if (iter != m_svmModels.end())
+	{
+		hs_model = iter->second;
+		return hs_model;
+	}
+	else if (hs_model.loadFromFile())
+	{
+		return hs_model;
+	}
+
+	clog << "computing model for " << asciiCode << endl;
+
+	uint pxbin = m_params.m_sbin;
+	
+	const auto& chVec = m_trData.getSamples(asciiCode);
+
+	int modelNew_H = round(m_trData.getMeanHeight(asciiCode)) + 2 * pxbin;
+	int modelNew_W = round(m_trData.getMeanWidth(asciiCode)) + 2 * pxbin;
+
+	uint res;
+	while ((res = (modelNew_H % pxbin)))
+	{
+		modelNew_H -= res;
+	}
+	while ((res = (modelNew_W % pxbin)))
+	{
+		modelNew_W -= res;
+	}
+
+	hs_model.m_newH = modelNew_H;
+	hs_model.m_newW = modelNew_W;
+	hs_model.m_bH = modelNew_H / pxbin - 2;
+	hs_model.m_bW = modelNew_W / pxbin - 2;
+	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
+
+	int numSamples = (m_params.m_numTrWords + m_params.m_numNWords)*chVec.size();
+	clog << "num of training samples for " << asciiCode << ": " << numSamples << endl;
+	Mat trHOGs = Mat::zeros(numSamples, descsz, CV_32F);
+	
+	size_t position = 0;
+	
+	for (const auto& ci : chVec)
+	{
+		// We expand the query to capture some context
+		Rect loc(ci.m_loc.x - pxbin, ci.m_loc.y - pxbin, ci.m_loc.width + 2 * pxbin, ci.m_loc.height + 2 * pxbin);
+
+		Mat imDoc = m_docs[ci.m_docNum].m_origImage;
+
+		// Get positive windows
+		samplePos(imDoc, trHOGs, position, loc, Size(modelNew_W, modelNew_H));
+	}
+
+	// Get negative windows
+	int wordsByDoc = (m_params.m_numNWords*chVec.size()) / m_docs.size();
+	sampleNeg(trHOGs, position, wordsByDoc, hs_model);
+
+	// Apply L2 - norm.
+	NormalizeFeatures(trHOGs);
+	
+	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords*chVec.size());
+
+	hs_model.save2File();
+	return hs_model;
+}
+
+HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& query)
+{
+	HogSvmModel hs_model(query.m_asciiCode, m_params.m_pathCharModels);
+
+	Rect loc = Character::resizeChar(query.m_loc, m_params.m_sbin);
+
+	hs_model.m_newH = loc.height;
+	hs_model.m_newW = loc.width;
+	hs_model.m_bH = hs_model.m_newH / m_params.m_sbin - 2;
+	hs_model.m_bW = hs_model.m_newW / m_params.m_sbin - 2;
+	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
+
+	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_32F);
+
+	Mat imDoc = doc.m_origImage;
+
+	// Get positive windows
+	size_t ps = 0;
+	samplePos(imDoc, trHOGs, ps, loc, Size(hs_model.m_newW, hs_model.m_newH));
+
+	// Get negative windows
+	int wordsByDoc = m_params.m_numNWords / m_docs.size();
+	uint startPos = m_params.m_numTrWords;
+
+	// Apply L2 - norm.
+	NormalizeFeatures(trHOGs);
+
+	// Train the (SVM) Classifier
+	int numSamples = m_params.m_numTrWords + m_params.m_numNWords;
+	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords);
+	
+	return hs_model;
+}
+
+void CharClassifier::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
 {
 	vector<double> scoresWindows;
 	vector<bool> resultsWindows;
@@ -344,6 +317,8 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 		vector<Rect> locW;
 		vector<double> scsW;
 		HogUtils::getWindows(doc, hs_model, scsW, locW, m_params.m_step, m_params.m_sbin);
+		
+		for_each(scsW.begin(), scsW.end(), [](double &scs){if (std::isnan(scs)) scs = -1; });
 
 		Mat I;
 		sortIdx(Mat(scsW), I, SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
@@ -401,13 +376,13 @@ void LearnModels::evalModel(const HogSvmModel& hs_model, uint classNum, vector<d
 			lastPosElement = i;
 		}
 	}
-	// Supress the last non - relevant windows(does not affect mAP)
+	// Suppress the last non - relevant windows(does not affect mAP)
 	scores.resize(lastPosElement + 1);
 	resultLabels.resize(lastPosElement + 1);
 	locWords.resize(lastPosElement + 1);
 }
 
-void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
+void CharClassifier::saveResultImages(const Doc& doc, const Character& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
 {
 	string qPathString = m_params.m_pathResultsImages + to_string(query.m_globalIdx+1) + "/";
 	path p(qPathString);
@@ -438,7 +413,7 @@ void LearnModels::saveResultImages(const Doc& doc, const CharInstance& query, co
 	}
 }
 
-void LearnModels::compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec)
+void CharClassifier::compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec)
 {
 	// Compute the mAP
 	vector<double> precAt(resultLabels.size());
@@ -451,4 +426,15 @@ void LearnModels::compute_mAP(const vector<double> &resultLabels, uint nrelW, do
 	mAP = inner_product(precAt.begin(), precAt.end(), resultLabels.begin(), .0);
 	mAP /= nrelW;
 	rec = sum / nrelW;
+}
+
+void CharClassifier::load_char_stats(charStatType &meanCont, charStatType& stdCont) const
+{
+	m_trData.load_char_stats(meanCont, stdCont);
+}
+
+void CharClassifier::getMinMaxCharLength(uint &maxCharLen, uint &minCharLen)
+{
+	maxCharLen = m_trData.m_globalMaxWidth;
+	minCharLen = m_trData.m_globalMinWidth;
 }
