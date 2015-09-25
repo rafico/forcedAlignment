@@ -25,7 +25,11 @@ private:
 		m_overlapnms(0.2),
 		m_overlap(0.5),
 
+#if _WIN32 || _WIN64
 		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset + "/"),
+#elif __GNUC__
+		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
+#endif
 		m_pathImages(m_datasetPath + "images/"),
 		m_pathGT(m_datasetPath + "ground_truth/"),
 		m_pathData("data/"),

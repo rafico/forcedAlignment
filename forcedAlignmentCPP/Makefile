@@ -39,13 +39,12 @@ endif
 # Targets
 PROGRAMS = test
 all: $(PROGRAMS)
-test: test.o LearnModels.o LMParams.o CharInstance.o Doc.o PedroFeatures.o LibLinearWrapper.o JsgdWrapper.o TrainingChars.o HogSvmModel.o
-LearnModels.o : LearnModels.cpp LearnModels.h HogSvmModel.h
-CharInstance.o : CharInstance.cpp CharInstance.h commonTypes.h
-LMParams.o : LMParams.cpp LMParams.h commonTypes.h
+test: test.o CharClassifier.o Params.o Doc.o HogUtils.o LibLinearWrapper.o JsgdWrapper.o TrainingData.o HogSvmModel.o
+CharClassifier.o : CharClassifier.cpp CharClassifier.h HogSvmModel.h
+Params.o : Params.cpp Params.h commonTypes.h
 Doc.o : Doc.cpp Doc.h commonTypes.h
-PedroFeatures.o : PedroFeatures.cpp PedroFeatures.h commonTypes.h
-TrainingChars.o : TrainingChars.cpp commonTypes.h
+HogUtils.o : HogUtils.cpp HogUtils.h commonTypes.h
+TrainingData.o : TrainingData.cpp commonTypes.h
 HogSvmModel.o : HogSvmModel.cpp commonTypes.h
 
 
