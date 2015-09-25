@@ -1,10 +1,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/system/config.hpp>
-#include "LMParams.h"
+#include "Params.h"
 
 using namespace boost::filesystem;
 
-void LMParams::initDirs()
+void Params::initDirs()
 {
 	vector<const string*> dirs = { &m_pathData, &m_pathResultsParent, &m_pathResults, &m_pathResultsImages, &m_pathCharModels };
 
