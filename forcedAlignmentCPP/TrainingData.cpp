@@ -41,7 +41,6 @@ TrainingData::TrainingData()
 
 void TrainingData::combineChars()
 {
-	uint classNum = 0;
 	for (size_t docNum = 0; docNum < m_trainingDocs.size(); ++docNum)
 	{
 		for (auto &ch : m_trainingDocs[docNum].m_chars)
@@ -153,7 +152,7 @@ void TrainingData::load_char_stats(charStatType &meanCont, charStatType& stdCont
 const Doc &TrainingData::getDocByName(string docName)
 {
 	size_t idx = 0;
-	auto &iter = m_file2Doc.find(docName);
+	auto iter = m_file2Doc.find(docName);
 	if (iter == m_file2Doc.end())
 	{
 		cerr << "Doc " << docName << " not found" << endl;

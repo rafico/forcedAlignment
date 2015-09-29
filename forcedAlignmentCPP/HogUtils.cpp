@@ -262,16 +262,16 @@ void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<do
 	scsW.resize(numWindows);
 
 	size_t k = 0;
-	for (size_t by = 0; by <= bH - nbinsH; by += step)
+	for (auto by = 0; by <= bH - nbinsH; by += step)
 	{
-		for (size_t bx = 0; bx <= bW - nbinsW; bx += step)
+		for (auto bx = 0; bx <= bW - nbinsW; bx += step)
 		{
 			scsW[k] = 0;
 			double norm = 0;
 
-			for (size_t tmpby = by, i = 0; tmpby < by + nbinsH; ++tmpby, ++i)
+			for (auto tmpby = by, i = 0; tmpby < by + nbinsH; ++tmpby, ++i)
 			{
-				size_t pos = (tmpby*bW + bx)*dim;
+				auto pos = (tmpby*bW + bx)*dim;
 				scsW[k] += inner_product(hs_model.weight.data() + i*nbinsW*dim, hs_model.weight.data() + (i + 1)*nbinsW*dim, flat + pos, .0);
 				norm += inner_product(flat + pos, flat + pos + nbinsW*dim, flat + pos, .0);
 			}

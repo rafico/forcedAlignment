@@ -101,9 +101,9 @@ void CharClassifier::sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, con
 			int bx = bxDis(gen);
 			auto *flat_trHOGs = trHOGs.ptr<float>(position);
 
-			for (size_t tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
+			for (auto tmpby = by, i = 0; tmpby < by + hs_model.m_bH; ++tmpby, ++i)
 			{
-				size_t pos = (tmpby*BW + bx)*dim;
+				auto pos = (tmpby*BW + bx)*dim;
 				copy(flat + pos, flat + pos + stepSize, flat_trHOGs + i*stepSize);
 			}
 			++position;
@@ -258,6 +258,7 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 	// Get negative windows
 	int wordsByDoc = m_params.m_numNWords / m_docs.size();
 	uint startPos = m_params.m_numTrWords;
+	sampleNeg(trHOGs, startPos, wordsByDoc, hs_model);
 
 	// Apply L2 - norm.
 	NormalizeFeatures(trHOGs);

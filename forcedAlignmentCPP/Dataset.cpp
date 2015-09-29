@@ -116,7 +116,7 @@ Output:       void.
 Comments:     none.
 ***********************************************************************/
 Dataset::Dataset(CharClassifier& lm)
-	: m_params(Params::getInstance()), m_lm(lm), m_current_line(0)
+	: m_current_line(0), m_params(Params::getInstance()), m_lm(lm)
 {
 	// Read list of files into StringVector
 	m_training_file_list.read(m_params.m_pathTrainingFiles);
@@ -145,7 +145,7 @@ void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 
 	string lineId = m_lineIds[m_current_line++];
 	
-	auto& iter = (m_examples.find(lineId));
+	auto iter = m_examples.find(lineId);
 	if (iter == m_examples.end())
 	{
 		cerr << "Could not find line: " << lineId << endl;
