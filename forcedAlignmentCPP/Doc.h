@@ -61,6 +61,7 @@ struct Doc
 
 	void resizeDoc(uint sbin);
 	void computeFeatures(uint sbin);
+	void getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin);
 
 	string m_pathImage;
 	Mat m_origImage;
@@ -72,6 +73,8 @@ struct Doc
 	uint m_xIni;
 	int m_bH;
 	int m_bW;
+
+	bool m_featuresComputed;
 
 	vector<Character> m_chars;
 	vector<Word> m_words;

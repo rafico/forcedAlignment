@@ -171,7 +171,7 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 {
 	Mat v = Mat::zeros(m_phi_size-1, 1, CV_64F);
 
-	uchar asciiCode = x.m_chars[i];
+	uchar asciiCode = x.m_charSeq[i];
 
 	double score = x.returnScore(asciiCode, t - l + 1, t);
 	v.at<double>(0) = score;
@@ -180,7 +180,7 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 	double lenth_std = m_char_length_std[asciiCode];
 	v.at<double>(1) = gaussian(l*m_sbin, length_mean, lenth_std);
 
-	return (v / double(x.m_chars.size()));
+	return (v / double(x.m_charSeq.size()));
 }
 
 /************************************************************************
@@ -203,8 +203,8 @@ double Classifier::phi_2(AnnotatedLine& x,
 {
 	double v = 0;
 
-	uchar currAsciiCode = x.m_chars[i];
-	uchar prevAsciiCode = x.m_chars[i-1];
+	uchar currAsciiCode = x.m_charSeq[i];
+	uchar prevAsciiCode = x.m_charSeq[i - 1];
 
 	double prevMean = m_char_length_mean[currAsciiCode];
 	double currMean = m_char_length_mean[prevAsciiCode];
@@ -213,7 +213,7 @@ double Classifier::phi_2(AnnotatedLine& x,
 		double(l2) / currMean);
 	v *= v;
 	
-	return (v / double(x.m_chars.size()));
+	return (v / double(x.m_charSeq.size()));
 }
 
 /************************************************************************
@@ -229,7 +229,7 @@ Comments:     none.
 double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 {
 	// predict label - the argmax operator
-	int C = x.m_chars.size();
+	int C = x.m_charSeq.size();
 	int T = x.m_bW;
 	int L = m_max_num_cells + 1;
 	threeDimArray<int> prev_l(C, T, L); // the value of l2 for back-tracking
@@ -248,7 +248,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	}
 
 	// The assumption is that two consecutive chars span the following interval [t-l1-l2+1,t-l1],[t-l1,t], 
-	// which have lenths l2 and l1 respectively.
+	// which have lengths l2 and l1 respectively.
 
 	// Recursion
 	for (int i = 1; i < C; i++) {
@@ -302,7 +302,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 /************************************************************************
 Function:     Classifier::aligned_phoneme_scores
 
-Description:  Compute the score of the pronunced phonemes x given alignment y
+Description:  Compute the score of the pronounced phonemes x given alignment y
 Inputs:       SpeechUtterance &x
 StartTimeSequence &y
 Output:       score

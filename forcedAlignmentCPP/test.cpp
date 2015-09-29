@@ -7,6 +7,7 @@
 #include "Dataset.h"
 #include "ForcedAlignmentTrain.h"
 #include "Doc.h"
+#include "CharSpotting.h"
 
 using namespace std;
 using namespace cv;
@@ -14,17 +15,10 @@ using namespace cv;
 int main(int argc, char** argv)
 {
 	
-	//Doc doc;
-	//doc.loadXml("D:/Dropbox/PhD/datasets/SG/ground_truth/csg562-005.xml");
+	ForcedAlignmentTrain::train();
 
-	//cout << doc;
-
-	//ForcedAlignmentTrain::train();
-
-	CharClassifier cc;
+	//CharClassifier cc;
 	//cc.learnModels();
-	cc.evaluateModels(false);
-	int x = 2;
 
 	cout << "Press any key to continue.";
 	getchar();

@@ -1,8 +1,9 @@
+#ifndef _WIN32 
+
 #include "JsgdWrapper.h"
 
 void JsgdWrapper::trainModel(Mat labels, Mat trainingData, vector<float>& weight)
 {
-#ifndef _WIN32 
 	CV_Assert(trainingData.type() == CV_32F);
 	Mat labels_int;
 	labels.convertTo(labels_int, CV_32S);
@@ -36,5 +37,5 @@ void JsgdWrapper::trainModel(Mat labels, Mat trainingData, vector<float>& weight
 	/* the call */
 	jsgd_train(nclass, &x, labels_0, w.data(), bias, &params);
 	weight.assign(w.begin(),w.begin()+x.d);
-#endif // !_WIN32
 }
+#endif // !_WIN32

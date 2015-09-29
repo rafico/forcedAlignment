@@ -13,7 +13,6 @@ struct TrainingCharsHelper
 	double m_heightStd;
 	int m_maxWidth;
 	int m_minWidth;
-	uint m_class;
 	vector<Character> m_instances;
 };
 
@@ -22,7 +21,7 @@ using charStatType = unordered_map<uchar, double>;
 
 struct TrainingData
 {
-	TrainingData(Params& params);
+	TrainingData();
 
 	void combineChars();
 	const vector<Character>& getSamples(uint asciiCode);
@@ -30,13 +29,12 @@ struct TrainingData
 	double getMeanHeight(uint asciiCode);
 	void computeNormalDistributionParams();
 	void getExtermalWidths(int &maxWidth, int& minWidth);
+	vector<Doc>& getTrainingDocs() { return m_trainingDocs; }
+	const Doc &getDocByName(string docName);
 	
 	void writeQueriesAndDocsGTPfiles();
 
 	void displayTrainingData();
-
-	// move this to some other class.
-	uint getCharClass(uchar asciiCode);
 
 	void load_char_stats(charStatType &meanCont, charStatType& stdCont) const;
 
@@ -48,8 +46,7 @@ struct TrainingData
 	Params& m_params;
 	vector<Doc> m_trainingDocs;
 
-	vector<uint> m_numRelevantWordsByClass;
-	vector<vector<Rect>> m_relevantBoxesByClass;
+	unordered_map<string, size_t> m_file2Doc;
 };
 
 #endif // !_H_TRAINING_CHARS_H__

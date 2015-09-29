@@ -16,12 +16,15 @@ PhonemeSequence --> CharSequence
 #include <stdio.h>
 #include <algorithm>
 #include <opencv2/core.hpp>
+#include <boost/filesystem.hpp>
 #include "Dataset.h"
 #include "HogUtils.h"
 
+using namespace boost::filesystem;
+
 using namespace std;
 
-// CharSequence static memebers definitions
+// CharSequence static member definitions
 unsigned int CharSequence::m_num_chars;
 
 
@@ -47,9 +50,10 @@ void CharSequence::from_string(const string &transcript)
 				{
 					push_back('&');
 				}
-				// we are ignoring punctuation marks
 				else if (buffer == "pt")
-				{}
+				{
+					push_back('.');
+				}
 				else
 				{
 					push_back(buffer[0]);
@@ -72,10 +76,10 @@ void CharSequence::from_string(const string &transcript)
 
 
 /************************************************************************
-Function:     operator << for PhonemeSequence
+Function:     operator << for CharSequence
 
-Description:  Write PhonemeSequence& vector to output stream
-Inputs:       std::ostream&, const StringVector&
+Description:  Write CharSequence& vector to output stream
+Inputs:       std::ostream&, const CharSequence&
 Output:       std::ostream&
 Comments:     none.
 ***********************************************************************/
@@ -88,10 +92,10 @@ std::ostream& operator<< (std::ostream& os, const CharSequence& y)
 }
 
 /************************************************************************
-Function:     operator << for PhonemeSequence
+Function:     operator << for StartTimeSequence
 
-Description:  Write PhonemeSequence& vector to output stream
-Inputs:       std::ostream&, const StringVector&
+Description:  Write StartTimeSequence& vector to output stream
+Inputs:       std::ostream&, const StartTimeSequence&
 Output:       std::ostream&
 Comments:     none.
 ***********************************************************************/
@@ -223,7 +227,7 @@ void Dataset::parseFiles()
 
 		string transcriptionString;
 		ssTranscription >> transcriptionString;
-		example.m_line.m_chars.from_string(transcriptionString);
+		example.m_line.m_charSeq.from_string(transcriptionString);
 
 		example.m_line.m_pathImage = m_params.m_pathLineImages + lineId + ".png";
 
@@ -239,7 +243,9 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 	x.Init(x.m_pathImage);
 	x.computeFeatures(sbin);
 
-	for (auto asciiCode : x.m_chars)
+	verifyGTconsistency(x);
+
+	for (auto asciiCode : x.m_charSeq)
 	{
 		// Computing scores for this model over the line, then sorting the scores according to the abscissa (x coordinate).
 		if (x.m_scores.find(asciiCode) == x.m_scores.end())
@@ -275,6 +281,35 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 			}
 
 			x.m_scores.insert({ asciiCode, move(scores) });
+		}
+	}
+}
+
+void Dataset::verifyGTconsistency(AnnotatedLine & x)
+{
+	// TODO: rewrite this function.
+	path linePath(x.m_pathImage);
+
+	auto temp = linePath.stem().string();
+	size_t found = temp.find_last_of("-");
+	string docName = temp.substr(0, found);
+	int lineNum = stoi(temp.substr(found + 1));
+
+	const Doc &doc = m_lm.getDocByName(docName);
+	const Line &line = doc.m_lines[lineNum-1];
+	size_t ALchIdx = 0;
+	for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++ wordIdx)
+	{
+		const Word &word = doc.m_words[line.m_wordIndices[wordIdx]];
+		for (auto &chIdx : word.m_charIndices)
+		{
+			auto ch = doc.m_chars[chIdx].m_asciiCode;
+			auto ALch = x.m_charSeq[ALchIdx++];
+			if (ch != ALch)
+			{
+				cerr << "Inconsistency in Doc: " << docName << " Line #: " << lineNum << " Word #: " << wordIdx << endl;
+				cerr << "Expected " << ch << " but got " << ALch << endl;
+			}
 		}
 	}
 }

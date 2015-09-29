@@ -88,7 +88,7 @@ struct AnnotatedLine : Doc
 
 	unordered_map<uchar, scoresType> m_scores;
 
-	CharSequence m_chars;
+	CharSequence m_charSeq;
 };
 
 /***********************************************************************/
@@ -101,7 +101,6 @@ public:
 	unsigned long size() { return m_start_times_file.size(); }
 
 	void loadTrainingData();
-	const vector<Doc>& getTrDocs(){ return m_trainingDocs; }
 
 private:
 
@@ -113,6 +112,7 @@ private:
 
 	void parseFiles();
 	void loadImageAndcomputeScores(AnnotatedLine &x);
+	void verifyGTconsistency(AnnotatedLine & x);
 	
 	StringVector m_training_file_list;
 	StringVector m_validation_file_list;
@@ -127,9 +127,6 @@ private:
 	bool m_isParsed = false;
 	Params &m_params;
 	CharClassifier &m_lm;
-
-	vector<Doc> m_trainingDocs;
-	vector<Doc> m_validationDocs;
 };
 
 

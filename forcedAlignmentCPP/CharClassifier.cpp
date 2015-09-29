@@ -6,8 +6,6 @@
 #include <random>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/system/config.hpp>
 #include <numeric>
 #include <chrono>
 #include <algorithm>
@@ -15,28 +13,17 @@
 #include "CharClassifier.h"
 #include "LibLinearWrapper.h"
 #include "TrainingData.h"
-//#include "JsgdWrapper.h"
+#include "JsgdWrapper.h"
 
-
-using namespace boost::filesystem;
 using namespace cv;
 using namespace std;
-using namespace chrono;
+
 
 CharClassifier::CharClassifier()
-	: m_params(Params::getInstance()), m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), m_trData(m_params)
+	: m_params(Params::getInstance()), m_docs(m_trData.getTrainingDocs())
 {
-	loadTrainingData();
 	m_trData.computeNormalDistributionParams();
-	computeFeaturesDocs();
-}
-
-void CharClassifier::loadTrainingData()
-{
-	m_docs = m_trData.m_trainingDocs;
-	m_numRelevantWordsByClass = m_trData.m_numRelevantWordsByClass;
-	m_relevantBoxesByClass = m_trData.m_relevantBoxesByClass;
-	m_numClasses = m_trData.m_numRelevantWordsByClass.size();
+	//computeFeaturesDocs();
 }
 
 void CharClassifier::computeFeaturesDocs()
@@ -56,34 +43,6 @@ void CharClassifier::learnModels()
 		uchar asciiCode = ch.first;
 		HogSvmModel hogSvmModel = learnModel(asciiCode);
 		m_svmModels.insert({ asciiCode, move(hogSvmModel)});
-	}
-}
-
-void CharClassifier::evaluateModels(bool ExemplarModel/*  = true */)
-{
-	size_t index = 1;
-	char buffer[256];
-
-	for (const auto& doc : m_docs)
-	{
-		for (const auto& query : doc.m_chars)
-		{
-			uint classNum = m_trData.getCharClass(query.m_asciiCode);
-			uint nrelW = m_numRelevantWordsByClass[classNum];
-			
-			HogSvmModel hogSvmModel = ExemplarModel ? learnExemplarModel(doc, query) : learnModel(query.m_asciiCode);
-			
-			vector<double> scores;
-			vector<double> resultLabels;
-			vector<pair<Rect, size_t>> locWords;
-			evalModel(hogSvmModel, classNum, scores, resultLabels, locWords);
-			saveResultImages(doc, query, resultLabels, locWords);
-			double mAP, rec;
-			compute_mAP(resultLabels, nrelW, mAP, rec);
-			sprintf(buffer, "%20c (%5lu): %2.2f (mAP) nRel: %d", query.m_asciiCode, index, mAP, nrelW);
-			clog << buffer << endl;
-			++index;
-		}
 	}
 }
 
@@ -122,12 +81,13 @@ void CharClassifier::sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, con
 
 	uint dim = m_params.m_dim;
 	size_t stepSize = hs_model.m_bW*dim;
+	uint sbin = m_params.m_sbin;
 
 	for (uint id = 0; id < m_docs.size(); ++id)
 	{
-		Mat fD = m_docs[id].m_features;
-		uint BH = m_docs[id].m_bH;
-		uint BW = m_docs[id].m_bW;
+		Mat fD;
+		int BH, BW;
+		m_docs[id].getComputedFeatures(fD, BH, BW, sbin);
 
 		float *flat = fD.ptr<float>(0);
 
@@ -161,6 +121,9 @@ void CharClassifier::trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, s
 
 	if (m_params.m_svmlib == "jsgd")
 	{
+#if _WIN32 || _WIN64
+		cerr << "JSGD option is not supported on windows OS" << endl;
+#elif __GNUC__
 		std::vector<int> randp;
 		randp.reserve(numSamples);
 		int n(0);
@@ -174,7 +137,8 @@ void CharClassifier::trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, s
 			trHOGs.row(randp[i]).copyTo(trHOGs_shuffled.row(i));
 			labels_shuffled.at<int>(i) = static_cast<int>(labels.at<float>(randp[i]));
 		}
-		//JsgdWrapper::trainModel(labels_shuffled, trHOGs_shuffled, hs_model.weight);
+		JsgdWrapper::trainModel(labels_shuffled, trHOGs_shuffled, hs_model.weight);
+#endif
 	}
 	else if (m_params.m_svmlib == "liblinear")
 	{
@@ -303,129 +267,6 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords);
 	
 	return hs_model;
-}
-
-void CharClassifier::evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords)
-{
-	vector<double> scoresWindows;
-	vector<bool> resultsWindows;
-	vector<pair<Rect, size_t>> locWindows;
-
-	for (size_t docNum = 0; docNum < m_docs.size(); ++docNum)
-	{
-		const Doc& doc = m_docs[docNum];
-		vector<Rect> locW;
-		vector<double> scsW;
-		HogUtils::getWindows(doc, hs_model, scsW, locW, m_params.m_step, m_params.m_sbin);
-		
-		for_each(scsW.begin(), scsW.end(), [](double &scs){if (std::isnan(scs)) scs = -1; });
-
-		Mat I;
-		sortIdx(Mat(scsW), I, SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
-		I = I.rowRange(I.rows - m_params.m_thrWindows-1, I.rows);
-		vector<int> pick = HogUtils::nms(I, locW, m_params.m_overlapnms);
-
-		Mat scsW_(1, int(pick.size()),CV_64F);
-		vector<Rect> locW_(pick.size());
-		for (uint i = 0; i < pick.size(); ++i)
-		{
-			scsW_.at<double>(i) = scsW[pick[i]];
-			locW_[i] = locW[pick[i]];
-		}
-		const vector<Rect>& relBoxes = getRelevantBoxesByClass(classNum, docNum);
-
-		vector<bool> res(pick.size(), false);
-		if (!(relBoxes.empty()))
-		{
-			auto areaP = hs_model.m_newH*hs_model.m_newW;
-			for (uint i = 0; i < locW_.size(); ++i)
-			{
-				for (uint j = 0; j < relBoxes.size(); ++j)
-				{
-					auto areaGT = relBoxes[j].area();
-					double intArea = (locW_[i] & relBoxes[j]).area();
-					double denom = (areaGT + areaP) - intArea;
-					double overlap = intArea / denom;
-					if (overlap >= m_params.m_overlap)
-					{
-						res[i] = true;
-						continue;
-					}
-				}
-			}
-		}
-		double *ptr_scsW = scsW_.ptr<double>(0);
-		scoresWindows.insert(scoresWindows.end(), ptr_scsW, ptr_scsW + scsW_.cols);
-		resultsWindows.insert(resultsWindows.end(), res.begin(), res.end());
-		for_each(locW_.begin(), locW_.end(), [&](const Rect& locW){locWindows.push_back(make_pair(locW,docNum)); });
-	}
-
-	Mat scoresIdx;
-	sortIdx(Mat(scoresWindows), scoresIdx, SORT_EVERY_COLUMN + CV_SORT_DESCENDING);
-	scores.resize(scoresIdx.rows);
-	resultLabels.resize(scoresIdx.rows);
-	locWords.resize(scoresIdx.rows);
-	size_t lastPosElement = 0;
-	for (int i = 0; i < scoresIdx.rows; ++i)
-	{
-		int idx = scoresIdx.at<int>(i);
-		scores[i] = scoresWindows[idx];
-		locWords[i] = locWindows[idx];
-		if ((resultLabels[i] = resultsWindows[idx]))
-		{
-			lastPosElement = i;
-		}
-	}
-	// Suppress the last non - relevant windows(does not affect mAP)
-	scores.resize(lastPosElement + 1);
-	resultLabels.resize(lastPosElement + 1);
-	locWords.resize(lastPosElement + 1);
-}
-
-void CharClassifier::saveResultImages(const Doc& doc, const Character& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords)
-{
-	string qPathString = m_params.m_pathResultsImages + to_string(query.m_globalIdx+1) + "/";
-	path p(qPathString);
-	if (!exists(p))
-	{
-		boost::filesystem::create_directory(p);
-	}
-	Mat imDocQ = doc.m_origImage;
-	Mat imq = imDocQ(query.m_loc);
-	imwrite(qPathString + "000q.png", imq);
-	size_t numIm = min(resultLabels.size(), m_params.m_numResultImages);
-	char fileName[128];
-	for (size_t i = 0; i < numIm; ++i)
-	{
-		char flag = resultLabels[i] ? 'c' : 'e';
-		sprintf(fileName, "%.3lu%c.png", i + 1, flag);
-		Rect bb = locWords[i].first;
-		size_t docIdx = locWords[i].second;
-		Mat imDoc = m_docs[docIdx].m_origImage;
-		
-		auto x1 = max(bb.x, 0);
-		auto x2 = min(bb.x + bb.width, imDoc.cols - 1);
-		auto y1 = max(bb.y, 0);
-		auto y2 = min(bb.y + bb.height, imDoc.rows - 1);
-		Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
-
-		imwrite(qPathString + fileName, im);
-	}
-}
-
-void CharClassifier::compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec)
-{
-	// Compute the mAP
-	vector<double> precAt(resultLabels.size());
-	double sum = 0;
-	for (size_t i = 0; i < resultLabels.size(); ++i)
-	{
-		sum += resultLabels[i];
-		precAt[i] = sum / (i + 1);
-	}
-	mAP = inner_product(precAt.begin(), precAt.end(), resultLabels.begin(), .0);
-	mAP /= nrelW;
-	rec = sum / nrelW;
 }
 
 void CharClassifier::load_char_stats(charStatType &meanCont, charStatType& stdCont) const

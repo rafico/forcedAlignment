@@ -8,8 +8,8 @@
 using namespace boost::filesystem;
 using namespace std;
 
-TrainingData::TrainingData(Params& params)
-	: m_params(params), m_numRelevantWordsByClass(UCHAR_MAX + 1, 0)
+TrainingData::TrainingData()
+	: m_params(Params::getInstance())
 {
 	std::clog << "* Loading documents *" << endl;
 
@@ -21,15 +21,17 @@ TrainingData::TrainingData(Params& params)
 	}
 
 	StringVector training_file_list;
-	training_file_list.read(params.m_pathTrainingFiles);
+	training_file_list.read(m_params.m_pathTrainingFiles);
 
 	for (const auto &fileName : training_file_list)
 	{
 		cout << "Loading " << fileName << endl;
-		string imgFileName = m_params.m_pathImages + path(fileName).filename().stem().string() + ".jpg";
+		string name = path(fileName).stem().string();
+		string imgFileName = m_params.m_pathImages + name + ".jpg";
 		Doc doc(imgFileName);
 		doc.loadXml(m_params.m_pathGT + fileName);
 		m_trainingDocs.push_back(Doc(doc));
+		m_file2Doc.insert({ name, m_trainingDocs.size()-1});
 	}
 
 	combineChars();
@@ -48,37 +50,18 @@ void TrainingData::combineChars()
 			auto iter = m_charInstances.find(ch.m_asciiCode);
 			if (iter != m_charInstances.end())
 			{
-				classNum = iter->second.m_class;
 				iter->second.m_instances.push_back(ch);
 			}
 			else
 			{
 				TrainingCharsHelper tch;
-				classNum = tch.m_class = uint(m_charInstances.size());
 				tch.m_instances.push_back(ch);
 				m_charInstances.insert({ ch.m_asciiCode, tch });
 			}
-			++m_numRelevantWordsByClass[classNum];
 		}
 	}
-
-	auto iter = find_if(m_numRelevantWordsByClass.begin(), m_numRelevantWordsByClass.end(), [](uint cnt){return cnt == 0; });
-	auto numClasses = distance(m_numRelevantWordsByClass.begin(), iter);
-	m_numRelevantWordsByClass.resize(numClasses);
 
 	size_t numDocs = m_trainingDocs.size();
-	m_relevantBoxesByClass.resize(numDocs*numClasses);
-	for (size_t i = 0; i < numDocs; ++i)
-	{
-		const auto& chars = m_trainingDocs[i].m_chars;
-		for (auto &ch : chars)
-		{
-			uint classNum = m_charInstances[ch.m_asciiCode].m_class;
-			Rect loc = ch.m_loc;
-			size_t idx = i*numClasses + classNum;
-			m_relevantBoxesByClass[idx].push_back(loc);
-		}
-	}
 	m_params.m_numNWords = ceil((double)m_params.m_numNWords / numDocs)*numDocs;
 }
 
@@ -167,9 +150,19 @@ void TrainingData::load_char_stats(charStatType &meanCont, charStatType& stdCont
 	}
 }
 
-uint TrainingData::getCharClass(uchar asciiCode)
+const Doc &TrainingData::getDocByName(string docName)
 {
-	return m_charInstances[asciiCode].m_class;
+	size_t idx = 0;
+	auto &iter = m_file2Doc.find(docName);
+	if (iter == m_file2Doc.end())
+	{
+		cerr << "Doc " << docName << " not found" << endl;
+	}
+	else
+	{
+		idx = iter->second;
+	}
+	return m_trainingDocs[idx];
 }
 
 void TrainingData::writeQueriesAndDocsGTPfiles()
@@ -197,6 +190,7 @@ void TrainingData::writeQueriesAndDocsGTPfiles()
 	queryFile.close();
 }
 
+// TODO: iterate over the docs/word/line and write to each char where it came from.
 void TrainingData::displayTrainingData()
 {
 	for (auto &ch : m_charInstances)

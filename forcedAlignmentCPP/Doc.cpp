@@ -80,6 +80,7 @@ Rect Character::resizeChar(const Rect &old_loc, uint sbin)
 }
 
 Doc::Doc()
+	: m_featuresComputed(false)
 {}
 
 Doc::Doc(string pathImage)
@@ -89,6 +90,7 @@ Doc::Doc(string pathImage)
 
 void Doc::Init(string pathImage)
 {
+	m_featuresComputed = false;
 	m_origImage = imread(pathImage);
 	m_pathImage = pathImage;
 	if (!m_origImage.data)
@@ -133,6 +135,17 @@ void Doc::computeFeatures(uint sbin)
 	resizeDoc(sbin);
 	Mat feat = HogUtils::process(m_image, sbin, &m_bH, &m_bW);
 	feat.convertTo(m_features, CV_32F);
+}
+
+void Doc::getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin)
+{
+	if (!m_featuresComputed)
+	{
+		computeFeatures(sbin);
+	}
+	features = m_features;
+	BH = m_bH;
+	BW = m_bW;
 }
 
 /*

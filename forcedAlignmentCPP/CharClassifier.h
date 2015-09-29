@@ -15,21 +15,17 @@ class CharClassifier
 {
 public:
 	CharClassifier();
-	void loadTrainingData();
 	void computeFeaturesDocs();
 	void learnModels();
 
-	void evaluateModels(bool ExemplarModel = true);
 	HogSvmModel learnModel(uchar asciiCode);
 	HogSvmModel learnExemplarModel(const Doc& doc, const Character& query);
 	
-	void evalModel(const HogSvmModel& hs_model, uint classNum, vector<double> &scores, vector<double> &resultLabels, vector<pair<Rect, size_t>> & locWords);
-	const vector<Rect>& getRelevantBoxesByClass(uint classNum, uint docNum) { return m_relevantBoxesByClass[docNum*m_numClasses + classNum];}
-	void saveResultImages(const Doc& doc, const Character& query, const vector<double>& resultLabels, const vector<pair<Rect, size_t>>& locWords);
-	void compute_mAP(const vector<double> &resultLabels, uint nrelW, double &mAP, double &rec);
-
 	void load_char_stats(charStatType &meanCont, charStatType& stdCont) const;
 	void getMinMaxCharLength(uint &maxCharLen, uint &minCharLen);
+
+	vector<Doc> &getTrainingDocs() { return m_trData.getTrainingDocs(); }
+	const Doc &getDocByName(const string &docName) { return m_trData.getDocByName(docName); }
 
 private:
 	void NormalizeFeatures(Mat & features);
@@ -39,14 +35,9 @@ private:
 
 	Params& m_params;
 
-	vector<uint> m_numRelevantWordsByClass;
-	vector<vector<Rect>> m_relevantBoxesByClass;
-	vector<Doc> m_docs;
-	size_t m_numClasses;
-
-	unordered_map<uchar, uint> m_classes;
 	unordered_map<uchar, HogSvmModel> m_svmModels;
 
 	TrainingData m_trData;
+	vector<Doc> &m_docs;
 };
 #endif // !_H_LEARN_MODELS_H__

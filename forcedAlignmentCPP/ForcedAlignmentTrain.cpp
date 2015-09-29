@@ -56,7 +56,7 @@ void ForcedAlignmentTrain::train()
 			// predict label
 			classifier.predict(x, y_hat);
 
-			cout << "chars=" << x.m_chars << endl;
+			cout << "chars=" << x.m_charSeq << endl;
 			cout << "alignment= " << y << endl;
 			cout << "predicted= " << y_hat << endl;
 
