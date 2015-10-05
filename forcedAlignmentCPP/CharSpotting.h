@@ -25,8 +25,9 @@ private:
 	size_t m_numClasses;
 	unordered_map<uchar, uint> m_classes;
 
-	const vector<Doc>& m_trainingDocs;
+	TrainingData &m_trData;
 	const Params &m_params;
+	const vector<Doc>& m_trainingDocs;
 
 	CharClassifier m_classifier;
 };

@@ -20,9 +20,13 @@ using namespace std;
 
 
 CharClassifier::CharClassifier()
-	: m_params(Params::getInstance()), m_docs(m_trData.getTrainingDocs())
+	: m_params(Params::getInstance()), 
+	m_trData(TrainingData::getInstance()),
+	m_docs(m_trData.getTrainingDocs())
 {
-	m_trData.computeNormalDistributionParams();
+	m_trData.estimateNormalDistributionParams();
+	size_t numDocs = m_docs.size();
+	m_numNWords = ceil((double)m_params.m_numNWords / numDocs)*numDocs;
 	//computeFeaturesDocs();
 }
 
@@ -37,10 +41,9 @@ void CharClassifier::computeFeaturesDocs()
 
 void CharClassifier::learnModels()
 {
-	const auto& t_chs = m_trData.m_charInstances;
-	for (auto& ch : t_chs)
+	vector<uchar> asciiCodes = m_trData.getAsciiCodes();
+	for (auto asciiCode : asciiCodes)
 	{
-		uchar asciiCode = ch.first;
 		HogSvmModel hogSvmModel = learnModel(asciiCode);
 		m_svmModels.insert({ asciiCode, move(hogSvmModel)});
 	}
@@ -205,7 +208,7 @@ HogSvmModel CharClassifier::learnModel(uchar asciiCode)
 	hs_model.m_bW = modelNew_W / pxbin - 2;
 	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
 
-	int numSamples = (m_params.m_numTrWords + m_params.m_numNWords)*chVec.size();
+	int numSamples = (m_params.m_numTrWords + m_numNWords)*chVec.size();
 	clog << "num of training samples for " << asciiCode << ": " << numSamples << endl;
 	Mat trHOGs = Mat::zeros(numSamples, descsz, CV_32F);
 	
@@ -223,7 +226,7 @@ HogSvmModel CharClassifier::learnModel(uchar asciiCode)
 	}
 
 	// Get negative windows
-	int wordsByDoc = (m_params.m_numNWords*chVec.size()) / m_docs.size();
+	int wordsByDoc = (m_numNWords*chVec.size()) / m_docs.size();
 	sampleNeg(trHOGs, position, wordsByDoc, hs_model);
 
 	// Apply L2 - norm.
@@ -247,7 +250,7 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 	hs_model.m_bW = hs_model.m_newW / m_params.m_sbin - 2;
 	uint descsz = hs_model.m_bH*hs_model.m_bW*m_params.m_dim;
 
-	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_params.m_numNWords, descsz, CV_32F);
+	Mat trHOGs = Mat::zeros(m_params.m_numTrWords + m_numNWords, descsz, CV_32F);
 
 	Mat imDoc = doc.m_origImage;
 
@@ -256,7 +259,7 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 	samplePos(imDoc, trHOGs, ps, loc, Size(hs_model.m_newW, hs_model.m_newH));
 
 	// Get negative windows
-	int wordsByDoc = m_params.m_numNWords / m_docs.size();
+	int wordsByDoc = m_numNWords / m_docs.size();
 	uint startPos = m_params.m_numTrWords;
 	sampleNeg(trHOGs, startPos, wordsByDoc, hs_model);
 
@@ -264,19 +267,8 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 	NormalizeFeatures(trHOGs);
 
 	// Train the (SVM) Classifier
-	int numSamples = m_params.m_numTrWords + m_params.m_numNWords;
+	int numSamples = m_params.m_numTrWords + m_numNWords;
 	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords);
 	
 	return hs_model;
-}
-
-void CharClassifier::load_char_stats(charStatType &meanCont, charStatType& stdCont) const
-{
-	m_trData.load_char_stats(meanCont, stdCont);
-}
-
-void CharClassifier::getMinMaxCharLength(uint &maxCharLen, uint &minCharLen)
-{
-	maxCharLen = m_trData.m_globalMaxWidth;
-	minCharLen = m_trData.m_globalMinWidth;
 }

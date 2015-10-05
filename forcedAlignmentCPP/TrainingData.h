@@ -17,33 +17,37 @@ struct TrainingCharsHelper
 };
 
 using TrainingCharsCont = unordered_map<uchar, TrainingCharsHelper>;
-using charStatType = unordered_map<uchar, double>;
 
-struct TrainingData
+class TrainingData : public Singleton<TrainingData>
 {
+	friend class Singleton<TrainingData>;
+
+private:
 	TrainingData();
 
+public:
 	void combineChars();
+	
+	vector<uchar> getAsciiCodes();
 	const vector<Character>& getSamples(uint asciiCode);
-	double getMeanWidth(uint asciiCode);
-	double getMeanHeight(uint asciiCode);
-	void computeNormalDistributionParams();
-	void getExtermalWidths(int &maxWidth, int& minWidth);
+	
+	void estimateNormalDistributionParams();
+	double getMinWidth(uchar asciiCode);
+	double getMaxWidth(uchar asciiCode);
+	double getMeanWidth(uchar asciiCode);
+	double getStdWidth(uchar asciiCode);
+	double getMeanHeight(uchar asciiCode);
+	void getExtermalWidths(vector<uchar>& charSeq, int &maxWidth, int& minWidth);
+	
 	vector<Doc>& getTrainingDocs() { return m_trainingDocs; }
-	const Doc &getDocByName(string docName);
+	const Doc *getDocByName(string docName);
 	
 	void writeQueriesAndDocsGTPfiles();
-
 	void displayTrainingData();
 
-	void load_char_stats(charStatType &meanCont, charStatType& stdCont) const;
-
-	// over all characters.
-	int m_globalMaxWidth;
-	int m_globalMinWidth;
-
+private:
 	TrainingCharsCont m_charInstances;
-	Params& m_params;
+	const Params& m_params;
 	vector<Doc> m_trainingDocs;
 
 	unordered_map<string, size_t> m_file2Doc;

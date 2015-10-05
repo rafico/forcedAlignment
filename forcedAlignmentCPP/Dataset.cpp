@@ -15,6 +15,7 @@ PhonemeSequence --> CharSequence
 #include <iterator>
 #include <stdio.h>
 #include <algorithm>
+#include <set>
 #include <opencv2/core.hpp>
 #include <boost/filesystem.hpp>
 #include "Dataset.h"
@@ -71,7 +72,18 @@ void CharSequence::from_string(const string &transcript)
 				buffer.push_back(ch);
 		}
 	}
+	if (buffer == "et")
+	{
+		push_back('&');
+	}
+	else if (buffer == "pt")
+	{
+		push_back('.');
+	}
+	else
+	{
 	push_back(buffer[0]);
+}
 }
 
 
@@ -115,8 +127,10 @@ Inputs:       std::string dataset_filename
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-Dataset::Dataset(CharClassifier& lm)
-	: m_current_line(0), m_params(Params::getInstance()), m_lm(lm)
+Dataset::Dataset()
+	: m_current_line(0), 
+	m_params(Params::getInstance()), 
+	m_trData(TrainingData::getInstance())
 {
 	// Read list of files into StringVector
 	m_training_file_list.read(m_params.m_pathTrainingFiles);
@@ -125,6 +139,7 @@ Dataset::Dataset(CharClassifier& lm)
 	// reading file content into StringVector
 	m_transcription_file.read(m_params.m_pathTranscription);
 	m_start_times_file.read(m_params.m_pathStartTime);
+	parseFiles();
 }
 
 
@@ -138,11 +153,6 @@ Comments:     none.
 ***********************************************************************/
 void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 {
-	if (!m_isParsed)
-	{
-		parseFiles();
-	}
-
 	string lineId = m_lineIds[m_current_line++];
 	
 	auto iter = m_examples.find(lineId);
@@ -158,40 +168,7 @@ void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 
 	int x_shift = x.m_xIni;
 	uint sbin = m_params.m_sbin;
-	transform(y.begin(), y.end(), y.begin(), [x_shift, sbin](int startTime){return floor(((double)startTime - x_shift) / sbin); });	
-}
-
-double AnnotatedLine::returnScore(uchar asciiCode, int startCell, int endCell)
-{
-	const HogSvmModel& hs_model = m_scores[asciiCode].m_hs_model;
-	const vector<Rect> &locW = m_scores[asciiCode].m_locW;
-	const vector<double> &scsW = m_scores[asciiCode].m_scsW;
-	const Mat& vis = m_scores[asciiCode].scoreVis;
-
-	double max_val = MISPAR_KATAN_MEOD;
-
-	int _endCell = min(max(endCell, startCell + hs_model.m_bW), m_bW);
-
-	Mat debug_im;
-
-	if (startCell >= 0)
-	{
-		debug_im = m_image.colRange(startCell * 6, _endCell * 6);
-
-		auto iter = find_if(locW.begin(), locW.end(), [startCell](const Rect& rect){return rect.x == startCell; });
-		if (iter != locW.end())
-		{
-			size_t index = distance(locW.begin(), iter);
-			for (; index < locW.size() && 
-				locW[index].x + hs_model.m_bW <= _endCell;
-				++index)
-			{
-				max_val = std::max(max_val, scsW[index]);
-			}
-		}
-	}
-	
-	return max_val;
+	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return startTime - x_shift; });	
 }
 
 std::ostream& operator<< (std::ostream& os, const IntVector& v)
@@ -208,14 +185,13 @@ std::ostream& operator<< (std::ostream& os, const IntVector& v)
 
 void Dataset::parseFiles()
 {
-	string lineId;
 	for (size_t index = 0; index < m_start_times_file.size(); ++index)
 	{
 		stringstream ssStartTime(m_start_times_file[index]);
 		stringstream ssTranscription(m_transcription_file[index]);
 
+		string lineId, lindIdTranscription;
 		ssStartTime >> lineId;
-		string lindIdTranscription;
 		ssTranscription >> lindIdTranscription;
 		if (lineId.compare(lindIdTranscription))
 		{
@@ -231,10 +207,35 @@ void Dataset::parseFiles()
 
 		example.m_line.m_pathImage = m_params.m_pathLineImages + lineId + ".png";
 
+		size_t found = lineId.find_last_of("-");
+		string docName = lineId.substr(0, found);
+		int lineNum = stoi(lineId.substr(found + 1));
+
+		const Doc *doc = m_trData.getDocByName(docName);
+		if (doc != nullptr)
+		{
+			// verify consistency with our GT.
+			const Line &line = doc->m_lines[lineNum - 1];
+			size_t ALchIdx = 0;
+			for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++wordIdx)
+			{
+				const Word &word = doc->m_words[line.m_wordIndices[wordIdx]];
+				for (auto &chIdx : word.m_charIndices)
+				{
+					auto ch = doc->m_chars[chIdx].m_asciiCode;
+					auto ALch = example.m_line.m_charSeq[ALchIdx++];
+					if (ch != ALch)
+					{
+						cerr << "Inconsistency in Doc: " << docName << " Line #: " << lineNum << " Word #: " << wordIdx+1 << endl;
+						cerr << "Expected " << ch << " but got " << ALch << endl;
+					}
+				}
+			}
+
 		m_examples.insert({lineId, example});
 		m_lineIds.push_back(lineId);
 	}
-	m_isParsed = true;
+	}
 }
 
 void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
@@ -243,73 +244,92 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 	x.Init(x.m_pathImage);
 	x.computeFeatures(sbin);
 
-	verifyGTconsistency(x);
-
 	for (auto asciiCode : x.m_charSeq)
 	{
-		// Computing scores for this model over the line, then sorting the scores according to the abscissa (x coordinate).
+		// Computing scores for this model over the line.
 		if (x.m_scores.find(asciiCode) == x.m_scores.end())
 		{
 			AnnotatedLine::scoresType scores;
-			scores.m_hs_model = m_lm.learnModel(asciiCode);
+			scores.m_hs_model = m_chClassifier.learnModel(asciiCode);
 
 			vector<Rect> locW;
 			vector<double> scsW;
-			HogUtils::getWindows(x, scores.m_hs_model, scsW, locW, m_params.m_step, m_params.m_sbin, false);
+			HogUtils::getWindows(x, scores.m_hs_model, scsW, locW, m_params.m_step, sbin, false);
 
-			vector<int> x_indices;
-			transform(locW.begin(), locW.end(), std::back_inserter(x_indices), [](Rect& locW) { return locW.x; });
-			Mat scoresIdx;
-			sortIdx(Mat(x_indices), scoresIdx, cv::SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
+			// computing HOG scores.
+			scores.m_HogScoreVals = Mat::ones(1, x.m_W, CV_64F)*-1;
+			double *ptr = scores.m_HogScoreVals.ptr<double>(0);
 
-			scores.m_locW.resize(x_indices.size());
-			scores.m_scsW.resize(x_indices.size());
-
-			for (size_t i = 0; i < x_indices.size(); ++i)
-			{
-				int index = scoresIdx.at<int>(i);
-				scores.m_locW[i] = locW[index];
-				scores.m_scsW[i] = scsW[index];
-			}
-
-			scores.scoreVis = Mat::zeros(x.m_bH, x.m_bW, CV_64F);
 			for (size_t i = 0; i < locW.size(); ++i)
 			{
-				int xInd = locW[i].x;
-				int yInd = locW[i].y;
-				scores.scoreVis.at<double>(yInd, xInd) = scsW[i];
+				int xInd = locW[i].x*sbin;
+				ptr[xInd] = std::max(ptr[xInd], 10*scsW[i]);
 			}
 
-			x.m_scores.insert({ asciiCode, move(scores) });
+			for (size_t idx = 0; idx < scores.m_HogScoreVals.cols; ++idx)
+			{
+				ptr[idx] = ptr[idx - (idx % sbin)];
+			}
+
+			// TODO: find local minima around some window do something with that.
+
+			const int intervalSz = 5;
+
+			// computing Projection Profile scores.
+			path p(x.m_pathImage);
+			string binImgPath = m_params.m_pathLineBinImages + p.stem().string() + ".png";
+			Mat OrigBin = cv::imread(binImgPath, CV_LOAD_IMAGE_GRAYSCALE);
+			Mat bin = OrigBin(Range(x.m_yIni, x.m_image.rows + x.m_yIni), Range(x.m_xIni, x.m_image.cols + x.m_xIni));
+			Mat pp;
+			reduce(bin, pp, 0, CV_REDUCE_SUM, CV_64F);
+			scores.m_pp = Mat::zeros(1, x.m_W, CV_64F);
+			for (int i = 0; i < pp.cols; ++i)
+			{
+				bool localMin = true;
+				double currentVal = pp.at<double>(i);
+				for (int offset = -intervalSz; (offset <= intervalSz) && localMin; ++offset)
+				{
+					double neighbourIdx = std::min(std::max(i+offset,0),pp.cols);
+					localMin &= currentVal <= pp.at<double>(neighbourIdx);
 		}
+				if (localMin && currentVal < pp.at<double>(std::min(i+1, pp.cols)))
+				{
+					scores.m_pp.colRange(std::max(i - intervalSz + 1, 0), std::min(int(i + intervalSz), pp.cols)) = 1;
 	}
 }
 
-void Dataset::verifyGTconsistency(AnnotatedLine & x)
+			// computing score using CC's
+			scores.m_cc_scores = Mat::zeros(1, x.m_W, CV_64F);
+			Mat labels;
+			connectedComponents(bin.t(), labels);
+			transpose(labels, labels);
+
+			set<int> current;
+			set<int> next;
+			set<int> diff;
+
+			for (size_t rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
 {
-	// TODO: rewrite this function.
-	path linePath(x.m_pathImage);
-
-	auto temp = linePath.stem().string();
-	size_t found = temp.find_last_of("-");
-	string docName = temp.substr(0, found);
-	int lineNum = stoi(temp.substr(found + 1));
-
-	const Doc &doc = m_lm.getDocByName(docName);
-	const Line &line = doc.m_lines[lineNum-1];
-	size_t ALchIdx = 0;
-	for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++ wordIdx)
-	{
-		const Word &word = doc.m_words[line.m_wordIndices[wordIdx]];
-		for (auto &chIdx : word.m_charIndices)
-		{
-			auto ch = doc.m_chars[chIdx].m_asciiCode;
-			auto ALch = x.m_charSeq[ALchIdx++];
-			if (ch != ALch)
-			{
-				cerr << "Inconsistency in Doc: " << docName << " Line #: " << lineNum << " Word #: " << wordIdx << endl;
-				cerr << "Expected " << ch << " but got " << ALch << endl;
+				current.insert(labels.at<int>(rowIdx, 0));
 			}
+
+			for (size_t colIdx = 1; colIdx < labels.cols - 1; ++colIdx)
+	{
+				for (size_t rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
+		{
+					next.insert(labels.at<int>(rowIdx, colIdx));
+				}
+
+				set_difference(next.begin(), next.end(), current.begin(), current.end(), inserter(diff, diff.begin()));
+				if (!diff.empty())
+			{
+					scores.m_cc_scores.colRange(std::max(colIdx - intervalSz+1, 0ull), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
+				}
+				current = move(next);
+				next.clear(); 
+				diff.clear();
+			}
+			x.m_scores.insert({ asciiCode, move(scores) });
 		}
 	}
 }

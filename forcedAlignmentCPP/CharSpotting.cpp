@@ -15,8 +15,9 @@ using namespace boost::filesystem;
 
 CharSpotting::CharSpotting()
 	: m_numRelevantWordsByClass(UCHAR_MAX + 1, 0), 
-	m_trainingDocs(m_classifier.getTrainingDocs()),
-	m_params(Params::getInstance())
+	m_trData(TrainingData::getInstance()),
+	m_params(Params::getInstance()),
+	m_trainingDocs(m_trData.getTrainingDocs())
 {
 	loadData();
 }

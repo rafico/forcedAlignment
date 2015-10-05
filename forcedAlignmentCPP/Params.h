@@ -2,10 +2,12 @@
 #define _H_LM_PARAMS_H__
 
 #include "commonTypes.h"
+#include "Singleton.h"
 
 //TODO: replace hard-coded params with an xml or ini file.
-struct Params
+class Params : public Singleton<Params>
 {
+	friend class Singleton<Params>;
 
 private:
 	Params()
@@ -41,27 +43,16 @@ private:
 		m_pathStartTime(m_pathGT + "charStartTime.txt"),
 		m_pathTrainingFiles(m_pathGT + "training_file_list.txt"),
 		m_pathValidationFiles(m_pathGT + "validation_file_list.txt"),
-		m_pathLineImages(m_datasetPath + "/data/line_images/")
+		m_pathLineImages(m_datasetPath + m_pathData + "line_images/"),
+		m_pathLineBinImages(m_datasetPath + m_pathData + "line_images_binarized/")
 	{
 		initDirs();
 	}
 
 	void initDirs();
 
-	Params(const Params&) = delete;
-	Params(const Params&&) = delete;
-	Params& operator=(const Params&) = delete;
-	Params& operator=(const Params&&) = delete;
-
 public:
 	
-	static Params& getInstance()
-	{
-		static Params instance; // Guaranteed to be destroyed.
-		// Instantiated on first use.
-		return instance;
-	}
-
 	//cell size.
 	uint m_sbin;
 	Range m_rangeX;
@@ -92,5 +83,6 @@ public:
 	string m_pathTrainingFiles;
 	string m_pathValidationFiles;
 	string m_pathLineImages;
+	string m_pathLineBinImages;
 };
 #endif // !_H_LM_PARAMS_H__

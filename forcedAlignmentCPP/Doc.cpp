@@ -135,6 +135,7 @@ void Doc::computeFeatures(uint sbin)
 	resizeDoc(sbin);
 	Mat feat = HogUtils::process(m_image, sbin, &m_bH, &m_bW);
 	feat.convertTo(m_features, CV_32F);
+	m_featuresComputed = true;
 }
 
 void Doc::getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin)

@@ -74,16 +74,17 @@ struct AnnotatedLine : Doc
 		: Doc(pathLine)
 	{}
 
-	double returnScore(uchar asciiCode, int cellStart, int cellEnd);
-
 	struct scoresType
 	{
+		/*
 		vector<Rect> m_locW;
 		vector<double> m_scsW;
+		*/
 		HogSvmModel m_hs_model;
 		
-		// for debugging.
-		Mat scoreVis;
+		Mat m_HogScoreVals;
+		Mat m_pp;
+		Mat m_cc_scores;
 	};
 
 	unordered_map<uchar, scoresType> m_scores;
@@ -96,9 +97,9 @@ struct AnnotatedLine : Doc
 class Dataset
 {
 public:
-	Dataset(CharClassifier& lm);
+	Dataset();
 	void read(AnnotatedLine &x, StartTimeSequence &y);
-	unsigned long size() { return m_start_times_file.size(); }
+	unsigned long size() { return m_lineIds.size(); }
 
 	void loadTrainingData();
 
@@ -112,7 +113,6 @@ private:
 
 	void parseFiles();
 	void loadImageAndcomputeScores(AnnotatedLine &x);
-	void verifyGTconsistency(AnnotatedLine & x);
 	
 	StringVector m_training_file_list;
 	StringVector m_validation_file_list;
@@ -124,9 +124,9 @@ private:
 	unordered_map<string, Example> m_examples;
 	vector<string> m_lineIds;
 
-	bool m_isParsed = false;
 	Params &m_params;
-	CharClassifier &m_lm;
+	TrainingData &m_trData;
+	CharClassifier m_chClassifier;
 };
 
 

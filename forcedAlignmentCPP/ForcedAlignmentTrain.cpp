@@ -5,6 +5,8 @@
 #include "Classifier.h"
 #include "CharClassifier.h"
 
+void drawSegResult(const AnnotatedLine &x, const StartTimeSequence &y, const StartTimeSequence &y_hat);
+
 void ForcedAlignmentTrain::train()
 {
 	string val_scores_filelist;
@@ -12,18 +14,10 @@ void ForcedAlignmentTrain::train()
 
 	double epsilon = 0;
 
-	const Params &params = Params::getInstance();
-	CharClassifier lm;
-	
-	uint max_char_legnth;
-	uint min_char_length;
-	lm.getMinMaxCharLength(max_char_legnth, min_char_length);
-
 	string loss_type = "alignment_loss";
 
 	// Initiate classifier
-	Classifier classifier(params.m_sbin, min_char_length, max_char_legnth, 0, loss_type);
-	classifier.load_char_stats(lm);
+	Classifier classifier(0, loss_type);
 
 	uint num_epochs = 1;
 
@@ -34,7 +28,7 @@ void ForcedAlignmentTrain::train()
 	for (uint epoch = 0; epoch < num_epochs; ++epoch) {
 
 		//beginning of the training set
-		Dataset training_dataset(lm);
+		Dataset training_dataset;
 
 		double max_loss_in_epoch = 0.0; // maximal loss value in this epoch
 		double avg_loss_in_epoch = 0.0; // training loss value in this epoch
@@ -51,6 +45,7 @@ void ForcedAlignmentTrain::train()
 
 			// read next example for dataset
 			training_dataset.read(x, y);
+			
 			y_hat.resize(y.size());
 
 			// predict label
@@ -59,6 +54,8 @@ void ForcedAlignmentTrain::train()
 			cout << "chars=" << x.m_charSeq << endl;
 			cout << "alignment= " << y << endl;
 			cout << "predicted= " << y_hat << endl;
+
+			drawSegResult(x, y, y_hat);
 
 			loss = classifier.update(x, y, y_hat);
 			cum_loss += loss;
@@ -113,4 +110,22 @@ void ForcedAlignmentTrain::train()
 #endif
 
 	cout << "Done." << endl;
+}
+
+void drawSegResult(const AnnotatedLine &x, const StartTimeSequence &y, const StartTimeSequence &y_hat)
+{
+	Mat img = x.m_image.clone();
+	for (size_t i = 0; i < y.size(); ++i)
+	{
+		if (y[i] == y_hat[i])
+		{
+			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), cv::Scalar(255, 255, 0));
+		}
+		else
+		{
+			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), cv::Scalar(255, 0, 0));
+			line(img, cv::Point(y_hat[i], 0), cv::Point(y_hat[i], img.rows), cv::Scalar(0, 255, 0));
+		}
+	}
+	int temp = 3;
 }

@@ -250,11 +250,13 @@ void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<do
 		p_sbin = 1;
 	}
 
-	Mat featDoc = doc.m_features;
+	int bH, bW;
+	Mat featDoc;
+	//Doc &nonconst_doc = ;
+	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW, sbin);
+
 	CV_Assert(featDoc.isContinuous());
 	float *flat = featDoc.ptr<float>(0);
-	auto bH = doc.m_bH;
-	auto bW = doc.m_bW;
 	auto nbinsH = hs_model.m_bH;
 	auto nbinsW = hs_model.m_bW;
 	auto dim = hs_model.weight.size() / (nbinsH*nbinsW);

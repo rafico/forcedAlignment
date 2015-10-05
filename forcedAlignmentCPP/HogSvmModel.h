@@ -21,7 +21,6 @@ struct HogSvmModel
 	double m_bias;
 
 	string m_fileName;
-
 };
 
 

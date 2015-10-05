@@ -4,7 +4,7 @@
 class ForcedAlignmentTrain
 {
 public:
-	static void train();
+	void static train();
 };
 
 

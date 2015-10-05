@@ -59,9 +59,13 @@ void TrainingData::combineChars()
 			}
 		}
 	}
+}
 
-	size_t numDocs = m_trainingDocs.size();
-	m_params.m_numNWords = ceil((double)m_params.m_numNWords / numDocs)*numDocs;
+vector<uchar> TrainingData::getAsciiCodes()
+{
+	vector<uchar> v;
+	for_each(m_charInstances.begin(), m_charInstances.end(), [&](TrainingCharsCont::value_type &csType){v.push_back(csType.first); });
+	return v;
 }
 
 const vector<Character>& TrainingData::getSamples(uint asciiCode)
@@ -70,18 +74,21 @@ const vector<Character>& TrainingData::getSamples(uint asciiCode)
 	return tch.m_instances;
 }
 
-void TrainingData::getExtermalWidths(int &maxWidth, int& minWidth)
+void TrainingData::getExtermalWidths(vector<uchar>& charSeq, int &maxWidth, int& minWidth)
 {
-	maxWidth = m_globalMaxWidth;
-	minWidth = m_globalMinWidth;
+	maxWidth = 0;
+	minWidth = 5000;
+
+	for (auto asciiCode : charSeq)
+	{
+		auto& tch = m_charInstances[asciiCode];
+		maxWidth = std::max(maxWidth, tch.m_maxWidth);
+		minWidth = std::min(minWidth, tch.m_minWidth);
+	}
 }
 
-
-void TrainingData::computeNormalDistributionParams()
+void TrainingData::estimateNormalDistributionParams()
 {
-	m_globalMaxWidth = 0;
-	m_globalMinWidth = 5000;
-
 	// computing the mean, max and min.
 	for (auto& ch : m_charInstances)
 	{
@@ -100,68 +107,63 @@ void TrainingData::computeNormalDistributionParams()
 			ch.second.m_minWidth = std::min(ch.second.m_minWidth, ci.m_loc.width);
 		});
 
-		m_globalMaxWidth = std::max(m_globalMaxWidth, ch.second.m_maxWidth);
-		m_globalMinWidth = std::min(m_globalMinWidth, ch.second.m_minWidth);
-		
 		double meanWidth = (widthSum / samplesVec.size());
 		double meanHeight = (heightSum / samplesVec.size());
 
 		// computing the variance.
 		double accumWidth = 0.0;
-		double accumHeight = 0.0;
 		for_each(begin(samplesVec), end(samplesVec), [&](const Character& ch)
 		{
 			accumWidth += (ch.m_loc.width - meanWidth) * (ch.m_loc.width - meanWidth);
-			accumHeight += (ch.m_loc.height - meanHeight) * (ch.m_loc.height - meanHeight);
 		});
 
 		double varWidth = accumWidth / (samplesVec.size() - 1);
-		double varHeight = accumHeight / (samplesVec.size() - 1);
 
 		ch.second.m_widthMean = meanWidth;
 		ch.second.m_widthStd = sqrt(varWidth);
 
 		ch.second.m_heightMean = meanHeight;
-		ch.second.m_heightStd = sqrt(varHeight);
 	}
 }
 
-double TrainingData::getMeanWidth(uint asciiCode)
+double TrainingData::getMinWidth(uchar asciiCode)
+{
+	return m_charInstances[asciiCode].m_minWidth;
+}
+
+double TrainingData::getMaxWidth(uchar asciiCode)
+{
+	return m_charInstances[asciiCode].m_maxWidth;
+}
+
+double TrainingData::getMeanWidth(uchar asciiCode)
 {
 	return m_charInstances[asciiCode].m_widthMean;
 }
 
-double TrainingData::getMeanHeight(uint asciiCode)
+double TrainingData::getStdWidth(uchar asciiCode)
+	{
+	return m_charInstances[asciiCode].m_widthStd;
+}
+		
+double TrainingData::getMeanHeight(uchar asciiCode)
 {
 	return m_charInstances[asciiCode].m_heightMean;
 }
 
-void TrainingData::load_char_stats(charStatType &meanCont, charStatType& stdCont) const
-{
-	for (auto& ch : m_charInstances)
-	{
-		uchar asciiCode = ch.first;
-		double mean = ch.second.m_widthMean;
-		double std = ch.second.m_widthStd;
-		
-		meanCont.insert({asciiCode, mean});
-		stdCont.insert({asciiCode, std});
-	}
-}
-
-const Doc &TrainingData::getDocByName(string docName)
+const Doc *TrainingData::getDocByName(string docName)
 {
 	size_t idx = 0;
 	auto iter = m_file2Doc.find(docName);
 	if (iter == m_file2Doc.end())
 	{
-		cerr << "Doc " << docName << " not found" << endl;
+		return nullptr;
 	}
 	else
 	{
 		idx = iter->second;
 	}
-	return m_trainingDocs[idx];
+	return &m_trainingDocs[idx];
 }
 
 void TrainingData::writeQueriesAndDocsGTPfiles()

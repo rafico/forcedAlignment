@@ -17,8 +17,8 @@ int main(int argc, char** argv)
 	
 	ForcedAlignmentTrain::train();
 
-	//CharClassifier cc;
-	//cc.learnModels();
+	//CharSpotting sp;
+	//sp.evaluateModels();
 
 	cout << "Press any key to continue.";
 	getchar();
