@@ -76,15 +76,9 @@ struct AnnotatedLine : Doc
 
 	struct scoresType
 	{
-		/*
-		vector<Rect> m_locW;
-		vector<double> m_scsW;
-		*/
 		HogSvmModel m_hs_model;
 		
-		Mat m_HogScoreVals;
-		Mat m_pp;
-		Mat m_cc_scores;
+		Mat m_scoreVals;
 	};
 
 	unordered_map<uchar, scoresType> m_scores;
@@ -113,6 +107,7 @@ private:
 
 	void parseFiles();
 	void loadImageAndcomputeScores(AnnotatedLine &x);
+	void computeFixedScores(AnnotatedLine &x, Mat &scores);
 	
 	StringVector m_training_file_list;
 	StringVector m_validation_file_list;

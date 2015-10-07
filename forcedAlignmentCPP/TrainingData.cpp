@@ -81,10 +81,13 @@ void TrainingData::getExtermalWidths(vector<uchar>& charSeq, int &maxWidth, int&
 
 	for (auto asciiCode : charSeq)
 	{
+		if (asciiCode != '|')
+		{
 		auto& tch = m_charInstances[asciiCode];
 		maxWidth = std::max(maxWidth, tch.m_maxWidth);
 		minWidth = std::min(minWidth, tch.m_minWidth);
 	}
+}
 }
 
 void TrainingData::estimateNormalDistributionParams()
@@ -128,12 +131,26 @@ void TrainingData::estimateNormalDistributionParams()
 
 double TrainingData::getMinWidth(uchar asciiCode)
 {
+	if (asciiCode != '|')
+	{
 	return m_charInstances[asciiCode].m_minWidth;
+}
+	else
+	{
+		return 1;
+	}
 }
 
 double TrainingData::getMaxWidth(uchar asciiCode)
 {
+	if (asciiCode != '|')
+	{
 	return m_charInstances[asciiCode].m_maxWidth;
+}
+	else
+	{
+		return 300;
+	}
 }
 
 double TrainingData::getMeanWidth(uchar asciiCode)

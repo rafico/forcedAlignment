@@ -40,6 +40,7 @@ Comments:     none.
 void CharSequence::from_string(const string &transcript)
 {
 	string buffer;
+	push_back('|');
 	for (size_t i = 0; i < transcript.size(); ++i)
 	{
 		char ch = transcript[i];
@@ -59,13 +60,10 @@ void CharSequence::from_string(const string &transcript)
 				{
 					push_back(buffer[0]);
 				}
-				// Currently we ignore the space between consecutive words.
-				/*
 				if (transcript[i] == '|')
 				{
 					push_back('|');
 				}
-				*/
 				buffer.clear();
 				break;
 			default:
@@ -84,6 +82,7 @@ void CharSequence::from_string(const string &transcript)
 	{
 	push_back(buffer[0]);
 }
+	push_back('|');
 }
 
 
@@ -167,8 +166,7 @@ void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 	loadImageAndcomputeScores(x);
 
 	int x_shift = x.m_xIni;
-	uint sbin = m_params.m_sbin;
-	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return startTime - x_shift; });	
+	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });	
 }
 
 std::ostream& operator<< (std::ostream& os, const IntVector& v)
@@ -199,7 +197,8 @@ void Dataset::parseFiles()
 		}
 		Example example;
 
-		example.m_time_seq.assign((istream_iterator<int>(ssStartTime)), (istream_iterator<int>()));
+		StartTimeSequence startTimeAndEndTime;
+		startTimeAndEndTime.assign((istream_iterator<int>(ssStartTime)), (istream_iterator<int>()));
 
 		string transcriptionString;
 		ssTranscription >> transcriptionString;
@@ -217,20 +216,40 @@ void Dataset::parseFiles()
 			// verify consistency with our GT.
 			const Line &line = doc->m_lines[lineNum - 1];
 			size_t ALchIdx = 0;
+			size_t timeSeqIdx = 0;
 			for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++wordIdx)
 			{
 				const Word &word = doc->m_words[line.m_wordIndices[wordIdx]];
 				for (auto &chIdx : word.m_charIndices)
 				{
 					auto ch = doc->m_chars[chIdx].m_asciiCode;
-					auto ALch = example.m_line.m_charSeq[ALchIdx++];
+					auto ALch = example.m_line.m_charSeq[ALchIdx];
+					if (ALch == '|')
+					{
+						int prevStartTime = (timeSeqIdx == 0) ? 0 : startTimeAndEndTime[2 * (timeSeqIdx - 1)];
+						int endTime = (timeSeqIdx == 0) ? 0 : (prevStartTime + startTimeAndEndTime[2 * timeSeqIdx - 1] + 1);
+						int nextStartTime = startTimeAndEndTime[2 * timeSeqIdx];
+						endTime = std::min(endTime, nextStartTime - 1);
+						example.m_time_seq.push_back(endTime);
+						ALch = example.m_line.m_charSeq[++ALchIdx];
+					}
 					if (ch != ALch)
 					{
 						cerr << "Inconsistency in Doc: " << docName << " Line #: " << lineNum << " Word #: " << wordIdx+1 << endl;
 						cerr << "Expected " << ch << " but got " << ALch << endl;
 					}
+					else if (ALch != '|')
+					{
+						int startTime = startTimeAndEndTime[2 * timeSeqIdx];
+						example.m_time_seq.push_back(startTime);
+					}
+					++ALchIdx;
+					++timeSeqIdx;
 				}
 			}
+
+			int endTime = startTimeAndEndTime[2 * (timeSeqIdx - 1)] + startTimeAndEndTime[2 * timeSeqIdx - 1] + 1;
+			example.m_time_seq.push_back(endTime);
 
 		m_examples.insert({lineId, example});
 		m_lineIds.push_back(lineId);
@@ -244,12 +263,19 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 	x.Init(x.m_pathImage);
 	x.computeFeatures(sbin);
 
+	Mat fixedScores;
+	computeFixedScores(x, fixedScores);
+
 	for (auto asciiCode : x.m_charSeq)
 	{
+		AnnotatedLine::scoresType scores;
+		scores.m_scoreVals = Mat::zeros(4, x.m_W, CV_64F);
+
+		if (asciiCode != '|')
+		{
 		// Computing scores for this model over the line.
 		if (x.m_scores.find(asciiCode) == x.m_scores.end())
 		{
-			AnnotatedLine::scoresType scores;
 			scores.m_hs_model = m_chClassifier.learnModel(asciiCode);
 
 			vector<Rect> locW;
@@ -257,21 +283,29 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 			HogUtils::getWindows(x, scores.m_hs_model, scsW, locW, m_params.m_step, sbin, false);
 
 			// computing HOG scores.
-			scores.m_HogScoreVals = Mat::ones(1, x.m_W, CV_64F)*-1;
-			double *ptr = scores.m_HogScoreVals.ptr<double>(0);
-
+				double *ptr = scores.m_scoreVals.ptr<double>(0);
+				scores.m_scoreVals.rowRange(0, 1) = -1;
 			for (size_t i = 0; i < locW.size(); ++i)
 			{
 				int xInd = locW[i].x*sbin;
 				ptr[xInd] = std::max(ptr[xInd], 10*scsW[i]);
 			}
 
-			for (size_t idx = 0; idx < scores.m_HogScoreVals.cols; ++idx)
+				for (auto idx = 0; idx < scores.m_scoreVals.cols; ++idx)
 			{
 				ptr[idx] = ptr[idx - (idx % sbin)];
 			}
+			}
+		}
+			fixedScores.copyTo(scores.m_scoreVals.rowRange(1, 4));
+			x.m_scores.insert({ asciiCode, move(scores) });
+	}
+}
 
-			// TODO: find local minima around some window do something with that.
+
+void Dataset::computeFixedScores(AnnotatedLine &x, Mat &scores)
+{
+	scores = Mat::zeros(3, x.m_W, CV_64F);
 
 			const int intervalSz = 5;
 
@@ -282,7 +316,7 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 			Mat bin = OrigBin(Range(x.m_yIni, x.m_image.rows + x.m_yIni), Range(x.m_xIni, x.m_image.cols + x.m_xIni));
 			Mat pp;
 			reduce(bin, pp, 0, CV_REDUCE_SUM, CV_64F);
-			scores.m_pp = Mat::zeros(1, x.m_W, CV_64F);
+	Mat ppMat = scores.rowRange(Range(0, 1));
 			for (int i = 0; i < pp.cols; ++i)
 			{
 				bool localMin = true;
@@ -294,12 +328,12 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 		}
 				if (localMin && currentVal < pp.at<double>(std::min(i+1, pp.cols)))
 				{
-					scores.m_pp.colRange(std::max(i - intervalSz + 1, 0), std::min(int(i + intervalSz), pp.cols)) = 1;
+			ppMat.colRange(std::max(i - intervalSz + 1, 0), std::min(int(i + intervalSz), pp.cols)) = 1;
 	}
 }
 
 			// computing score using CC's
-			scores.m_cc_scores = Mat::zeros(1, x.m_W, CV_64F);
+	Mat ccMat = scores.rowRange(Range(1, 2));
 			Mat labels;
 			connectedComponents(bin.t(), labels);
 			transpose(labels, labels);
@@ -308,14 +342,14 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 			set<int> next;
 			set<int> diff;
 
-			for (size_t rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
+	for (auto rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
 {
 				current.insert(labels.at<int>(rowIdx, 0));
 			}
 
-			for (size_t colIdx = 1; colIdx < labels.cols - 1; ++colIdx)
+	for (auto colIdx = 1; colIdx < labels.cols - 1; ++colIdx)
 	{
-				for (size_t rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
+		for (auto rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
 		{
 					next.insert(labels.at<int>(rowIdx, colIdx));
 				}
@@ -323,13 +357,16 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 				set_difference(next.begin(), next.end(), current.begin(), current.end(), inserter(diff, diff.begin()));
 				if (!diff.empty())
 			{
-					scores.m_cc_scores.colRange(std::max(colIdx - intervalSz+1, 0ull), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
+			ccMat.colRange(std::max(colIdx - intervalSz + 1, 0), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
 				}
 				current = move(next);
 				next.clear(); 
 				diff.clear();
 			}
-			x.m_scores.insert({ asciiCode, move(scores) });
-		}
-	}
+
+	// computing integral Projection Profile
+	Mat intPPMat;
+	integral(pp, intPPMat);
+	intPPMat /= 255;
+	intPPMat.rowRange(1,2).colRange(1,pp.cols+1).copyTo(scores.rowRange(Range(2, 3)));
 }

@@ -36,7 +36,6 @@ void ForcedAlignmentTrain::train()
 		// Run over all dataset
 		for (uint i = 0; i < training_dataset.size(); i++)
 		{
-
 			AnnotatedLine x;
 			StartTimeSequence y;
 			StartTimeSequence y_hat;

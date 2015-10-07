@@ -9,7 +9,7 @@ Programmers: Joseph Keshet & Rafi Cohen
 #include "Classifier.h"
 #include "array3dim.h"
 
-#define GAMMA_EPSILON 5
+#define GAMMA_EPSILON 15
 #define NORM_TYPE1 // normalize each phoneme in phi_0 by its num of frames
 //#define NORM_TYPE2
 #define NORM_SCORES_0_1
@@ -118,7 +118,7 @@ Mat Classifier::phi(AnnotatedLine& x, StartTimeSequence& y)
 		int char_end_at;
 		if (i == int(y.size()) - 1)
 		{
-			char_end_at = x.m_W;
+			char_end_at = x.m_W-1;
 		}
 		else
 		{
@@ -160,19 +160,33 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 	int endCell = t;
 	Mat debugIm = x.m_image.colRange(startCell, std::min(endCell + 1, x.m_image.cols));
 
+	double lengthLikelihood;
 	const auto& scores = x.m_scores[asciiCode];
-	
-	double hogScore = scores.m_HogScoreVals.at<double>(startCell);
-	double ppScore = scores.m_pp.at<double>(std::max(startCell-1,0));
-	double ccScore = scores.m_cc_scores.at<double>(startCell);
+	if (asciiCode != '|')
+	{
+		double hogScore = scores.m_scoreVals.at<double>(0, startCell);
+		double ppScore = scores.m_scoreVals.at<double>(1, std::max(startCell - 1, 0));
 
 	v.at<double>(0) = hogScore;
 	v.at<double>(1) = ppScore;
-	v.at<double>(2) = ccScore;
 
 	double length_mean = m_trData.getMeanWidth(asciiCode);
 	double lenth_std = m_trData.getStdWidth(asciiCode);
-	auto lengthLikelihood = gaussian(l, length_mean, lenth_std);
+		lengthLikelihood = gaussian(l, length_mean, lenth_std);
+	}
+	else
+	{
+		v.at<double>(0) = 0;
+		double prevVal = (startCell == 0) ? 0 : scores.m_scoreVals.at<double>(3, startCell - 1);
+		double currentVal = scores.m_scoreVals.at<double>(3, endCell);
+		double ppScore = exp(-(currentVal - prevVal)/(endCell - startCell));
+		v.at<double>(1) = ppScore;
+		lengthLikelihood = 0;
+	}
+
+	double ccScore = scores.m_scoreVals.at<double>(2, startCell);
+	v.at<double>(2) = ccScore;
+
 	v.at<double>(3) = lengthLikelihood;
 
 	return (v / double(x.m_charSeq.size()));
@@ -201,12 +215,15 @@ double Classifier::phi_2(AnnotatedLine& x,
 	uchar currAsciiCode = x.m_charSeq[i];
 	uchar prevAsciiCode = x.m_charSeq[i - 1];
 
+	if (currAsciiCode != '|' && prevAsciiCode != '|')
+	{
 	double prevMean = m_trData.getMeanWidth(currAsciiCode);
 	double currMean = m_trData.getMeanWidth(prevAsciiCode);
 
 	v = (double(l1) / prevMean -
 		double(l2) / currMean);
 	v *= v;
+	}
 	
 	return (v / double(x.m_charSeq.size()));
 }
@@ -230,7 +247,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 		
 	int C = x.m_charSeq.size();
 	int T = x.m_W;
-	int L = maxNumCols + 1;
+	int L = 5*maxNumCols + 1;
 	threeDimArray<int> prev_l(C, T, L); // the value of l2 for back-tracking
 	threeDimArray<int> prev_t(C, T, L); // the value of t2 for back-tracking
 	threeDimArray<double> D0(C, T, L); // char i finished at time t and started at t-l+1
@@ -240,27 +257,22 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	D0.init(MISPAR_KATAN_MEOD);
 
 	// Here calculate the calculation for the culculata
-
-	int chMinCols = m_trData.getMinWidth(x.m_charSeq[0]);
-	int chMaxCols = m_trData.getMaxWidth(x.m_charSeq[0]);
-	for (int t = chMinCols; t < _min(T, 5*chMaxCols); ++t)
+	for (int t = 1; t < _min(T, 5 * maxNumCols); ++t)
 	{
-		for (int l = chMinCols + 1; l <= _min(t + 1, chMaxCols); ++l)
-	{
-			D1 = m_w.rowRange(0, m_phi_size - 1).dot(phi_1(x, 0, t, l));
-			D0(0, t, l) = D1;
-		}
+		D1 = m_w.rowRange(0, m_phi_size - 1).dot(phi_1(x, 0, t, t+1));
+		D0(0, t, t+1) = D1;
 	}
 
 	// The assumption is that two consecutive chars span the following interval [t-l1-l2+1,t-l1],[t-l1,t], 
 	// which have lengths l2 and l1 respectively.
+	int chMinCols, chMaxCols;
 
 	// Recursion
 	for (int i = 1; i < C; i++) 
 	{
 		uchar asciiCode = x.m_charSeq[i];
-		int chMinCols = m_trData.getMinWidth(x.m_charSeq[i]);
-		int chMaxCols = m_trData.getMaxWidth(x.m_charSeq[i]);
+		chMinCols = m_trData.getMinWidth(x.m_charSeq[i]);
+		chMaxCols = m_trData.getMaxWidth(x.m_charSeq[i]);
 
 		cout << i << ":handling " << asciiCode << endl;
 		for (int t = chMinCols; t < T; ++t)
@@ -293,22 +305,16 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	std::vector<int> pred_t(C);
 	D2_max = MISPAR_KATAN_MEOD;
 
-	chMinCols = m_trData.getMinWidth(x.m_charSeq[C-1]);
-	chMaxCols = m_trData.getMaxWidth(x.m_charSeq[C-1]);
-	int stop_t_at = std::max(T - (3 * chMaxCols), 0);
-	for (int t = T-1; t > stop_t_at; --t)
+	for (int l = 1; l <= _min(T, 5 * maxNumCols); ++l)
 	{
-		for (int l = chMinCols; l <= _min(T, chMaxCols); l++)
+		if (D0(C - 1, T - 1, l) > D2_max) 
 		{
-			if (D0(C - 1, t, l) > D2_max) 
-			{
-				D2_max = D0(C - 1, t, l);
+			D2_max = D0(C - 1, T - 1, l);
 			pred_l[C - 1] = l;
-				pred_t[C - 1] = t;
-			}
+			pred_t[C - 1] = T - 1;
 		}
 	}
-	y_hat[C - 1] = pred_t[C - 1] - pred_l[C - 1] + 1;
+	y_hat[C - 1] = T - 1 - pred_l[C - 1] + 1;
 
 	// Back-tracking
 	for (short p = C - 2; p >= 0; p--) {
@@ -316,11 +322,10 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 		pred_t[p] = prev_t(p + 1, pred_t[p + 1], pred_l[p + 1]);
 		y_hat[p] = pred_t[p] - pred_l[p] + 1;
 	}
+	y_hat[0] = 0;
 
 	return (D2_max / double(T));
 }
-
-
 
 /************************************************************************
 Function:     Classifier::aligned_phoneme_scores
