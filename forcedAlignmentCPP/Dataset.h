@@ -77,11 +77,11 @@ struct AnnotatedLine : Doc
 	struct scoresType
 	{
 		HogSvmModel m_hs_model;
-		
 		Mat m_scoreVals;
 	};
 
 	unordered_map<uchar, scoresType> m_scores;
+	Mat m_fixedScores;
 
 	CharSequence m_charSeq;
 };
@@ -92,11 +92,13 @@ class Dataset
 {
 public:
 	Dataset();
-	void read(AnnotatedLine &x, StartTimeSequence &y);
-	unsigned long size() { return m_lineIds.size(); }
+	void readTrLine(AnnotatedLine &x, StartTimeSequence &y);
+	void readValLine(AnnotatedLine &x, StartTimeSequence &y);
 
-	void loadTrainingData();
+	size_t trSize() { return m_valStartIndex; }
+	size_t valSize() { return m_lineIds.size() - m_valStartIndex; }
 
+	void resetValIndex();
 private:
 
 	struct Example
@@ -107,17 +109,20 @@ private:
 
 	void parseFiles();
 	void loadImageAndcomputeScores(AnnotatedLine &x);
-	void computeFixedScores(AnnotatedLine &x, Mat &scores);
+	void computeFixedScores(AnnotatedLine &x);
+	void readLine(AnnotatedLine &x, StartTimeSequence &y, int line_index);
 	
 	StringVector m_training_file_list;
 	StringVector m_validation_file_list;
 
 	StringVector m_transcription_file;
 	StringVector m_start_times_file;
-	int m_current_line;
+	int m_current_tr_line;
+	int m_current_val_line;
 
 	unordered_map<string, Example> m_examples;
 	vector<string> m_lineIds;
+	int m_valStartIndex;
 
 	Params &m_params;
 	TrainingData &m_trData;

@@ -127,7 +127,9 @@ Output:       void.
 Comments:     none.
 ***********************************************************************/
 Dataset::Dataset()
-	: m_current_line(0), 
+	: m_current_tr_line(0),
+	m_current_val_line(0),
+	m_valStartIndex(-1),
 	m_params(Params::getInstance()), 
 	m_trData(TrainingData::getInstance())
 {
@@ -150,9 +152,19 @@ Inputs:       AnnotatedLine&, StartTimeSequence&
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
+void Dataset::readTrLine(AnnotatedLine &x, StartTimeSequence &y)
 {
-	string lineId = m_lineIds[m_current_line++];
+	readLine(x, y, m_current_tr_line++);
+}
+
+void Dataset::readValLine(AnnotatedLine &x, StartTimeSequence &y)
+{
+	readLine(x, y, m_valStartIndex +  m_current_val_line++);
+}
+
+void Dataset::readLine(AnnotatedLine &x, StartTimeSequence &y, int line_index)
+{
+	string lineId = m_lineIds[line_index];
 	
 	auto iter = m_examples.find(lineId);
 	if (iter == m_examples.end())
@@ -169,15 +181,14 @@ void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });	
 }
 
+void Dataset::resetValIndex()
+{
+	m_current_val_line = 0;
+}
+
 std::ostream& operator<< (std::ostream& os, const IntVector& v)
 {
-	IntVector::const_iterator iter = v.begin();
-	IntVector::const_iterator end = v.end();
-
-	while (iter < end) {
-		os << *iter << " ";
-		++iter;
-	}
+	for_each(begin(v), end(v), [&](int val){os << val << " "; });
 	return os;
 }
 
@@ -209,6 +220,14 @@ void Dataset::parseFiles()
 		size_t found = lineId.find_last_of("-");
 		string docName = lineId.substr(0, found);
 		int lineNum = stoi(lineId.substr(found + 1));
+
+		auto iter = find(m_validation_file_list.begin(), m_validation_file_list.end(), docName+".xml");
+		{
+			if (iter != m_validation_file_list.end() && m_valStartIndex == -1)
+			{
+				m_valStartIndex = index;
+			}
+		}
 
 		const Doc *doc = m_trData.getDocByName(docName);
 		if (doc != nullptr)
@@ -263,13 +282,12 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 	x.Init(x.m_pathImage);
 	x.computeFeatures(sbin);
 
-	Mat fixedScores;
-	computeFixedScores(x, fixedScores);
+	computeFixedScores(x);
 
 	for (auto asciiCode : x.m_charSeq)
 	{
 		AnnotatedLine::scoresType scores;
-		scores.m_scoreVals = Mat::zeros(4, x.m_W, CV_64F);
+		scores.m_scoreVals = Mat::zeros(1, x.m_W, CV_64F);
 
 		if (asciiCode != '|')
 		{
@@ -297,15 +315,18 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 			}
 			}
 		}
-			fixedScores.copyTo(scores.m_scoreVals.rowRange(1, 4));
 			x.m_scores.insert({ asciiCode, move(scores) });
 	}
 }
 
 
-void Dataset::computeFixedScores(AnnotatedLine &x, Mat &scores)
+void Dataset::computeFixedScores(AnnotatedLine &x)
 {
-	scores = Mat::zeros(3, x.m_W, CV_64F);
+	// row 0 - projection profile
+	// row 1 - connected components 
+	// row 2 - integral projection profile.
+
+	x.m_fixedScores = Mat::zeros(3, x.m_W, CV_64F);
 
 			const int intervalSz = 5;
 
@@ -316,7 +337,7 @@ void Dataset::computeFixedScores(AnnotatedLine &x, Mat &scores)
 			Mat bin = OrigBin(Range(x.m_yIni, x.m_image.rows + x.m_yIni), Range(x.m_xIni, x.m_image.cols + x.m_xIni));
 			Mat pp;
 			reduce(bin, pp, 0, CV_REDUCE_SUM, CV_64F);
-	Mat ppMat = scores.rowRange(Range(0, 1));
+	Mat ppMat = x.m_fixedScores.rowRange(Range(0, 1));
 			for (int i = 0; i < pp.cols; ++i)
 			{
 				bool localMin = true;
@@ -328,12 +349,12 @@ void Dataset::computeFixedScores(AnnotatedLine &x, Mat &scores)
 		}
 				if (localMin && currentVal < pp.at<double>(std::min(i+1, pp.cols)))
 				{
-			ppMat.colRange(std::max(i - intervalSz + 1, 0), std::min(int(i + intervalSz), pp.cols)) = 1;
+			ppMat.colRange(std::max(i - intervalSz + 2, 0), std::min(int(i + intervalSz + 1), pp.cols)) = 1;
 	}
 }
 
 			// computing score using CC's
-	Mat ccMat = scores.rowRange(Range(1, 2));
+	Mat ccMat = x.m_fixedScores.rowRange(Range(1, 2));
 			Mat labels;
 			connectedComponents(bin.t(), labels);
 			transpose(labels, labels);
@@ -368,5 +389,5 @@ void Dataset::computeFixedScores(AnnotatedLine &x, Mat &scores)
 	Mat intPPMat;
 	integral(pp, intPPMat);
 	intPPMat /= 255;
-	intPPMat.rowRange(1,2).colRange(1,pp.cols+1).copyTo(scores.rowRange(Range(2, 3)));
+	intPPMat.rowRange(1, 2).colRange(1, pp.cols + 1).copyTo(x.m_fixedScores.rowRange(Range(2, 3)));
 }

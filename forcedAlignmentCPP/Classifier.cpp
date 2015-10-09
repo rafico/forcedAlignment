@@ -66,7 +66,6 @@ double Classifier::update(AnnotatedLine& x, StartTimeSequence &y,
 
 	Mat delta_phi = Mat::zeros(m_phi_size, 1, CV_64F);
 	
-
 	Mat phi_x_y = phi(x, y);
 	Mat phi_x_y_hat = phi(x, y_hat);
 
@@ -158,34 +157,29 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 
 	int startCell = t - l + 1;
 	int endCell = t;
-	Mat debugIm = x.m_image.colRange(startCell, std::min(endCell + 1, x.m_image.cols));
+	//Mat debugIm = x.m_image.colRange(startCell, std::min(endCell + 1, x.m_image.cols));
 
-	double lengthLikelihood;
+	double lengthLikelihood = 0;
 	const auto& scores = x.m_scores[asciiCode];
 	if (asciiCode != '|')
 	{
-		double hogScore = scores.m_scoreVals.at<double>(0, startCell);
-		double ppScore = scores.m_scoreVals.at<double>(1, std::max(startCell - 1, 0));
-
-	v.at<double>(0) = hogScore;
-	v.at<double>(1) = ppScore;
+		v.at<double>(0) = scores.m_scoreVals.at<double>(0, startCell);
+		v.at<double>(1) = x.m_fixedScores.at<double>(0, startCell);
+		v.at<double>(2) = x.m_fixedScores.at<double>(1, startCell);
 
 	double length_mean = m_trData.getMeanWidth(asciiCode);
 	double lenth_std = m_trData.getStdWidth(asciiCode);
-		lengthLikelihood = gaussian(l, length_mean, lenth_std);
+		lengthLikelihood = 10*gaussian(l, length_mean, lenth_std);
 	}
 	else
 	{
-		v.at<double>(0) = 0;
-		double prevVal = (startCell == 0) ? 0 : scores.m_scoreVals.at<double>(3, startCell - 1);
-		double currentVal = scores.m_scoreVals.at<double>(3, endCell);
+		double prevVal = (startCell == 0) ? 0 : x.m_fixedScores.at<double>(2, startCell - 1);
+		double currentVal = x.m_fixedScores.at<double>(2, endCell);
 		double ppScore = exp(-(currentVal - prevVal)/(endCell - startCell));
-		v.at<double>(1) = ppScore;
-		lengthLikelihood = 0;
-	}
 
-	double ccScore = scores.m_scoreVals.at<double>(2, startCell);
-	v.at<double>(2) = ccScore;
+		v.at<double>(2) = x.m_fixedScores.at<double>(1, startCell) + x.m_fixedScores.at<double>(1, endCell);
+		v.at<double>(1) = ppScore;
+	}
 
 	v.at<double>(3) = lengthLikelihood;
 
@@ -222,7 +216,7 @@ double Classifier::phi_2(AnnotatedLine& x,
 
 	v = (double(l1) / prevMean -
 		double(l2) / currMean);
-	v *= v;
+		//v *= v;
 	}
 	
 	return (v / double(x.m_charSeq.size()));
@@ -253,14 +247,27 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	threeDimArray<double> D0(C, T, L); // char i finished at time t and started at t-l+1
 	double D1, D2, D2_max; // helper variables
 
+	unordered_map<uchar, size_t> mapChar2Idx;
+	for (int i = 0; i < C; ++i)
+	{
+		auto iter = mapChar2Idx.find(x.m_charSeq[i]);
+		if (iter == mapChar2Idx.end())
+		{
+			mapChar2Idx.insert({ x.m_charSeq[i], mapChar2Idx.size()});
+		}
+	}
+	threeDimArray<double> Mem(mapChar2Idx.size(), T, L); // memoization for w*phi1(i, t, l1)
+
 	// Initialization
 	D0.init(MISPAR_KATAN_MEOD);
+	Mem.init(MISPAR_KATAN_MEOD);
 
 	// Here calculate the calculation for the culculata
 	for (int t = 1; t < _min(T, 5 * maxNumCols); ++t)
 	{
 		D1 = m_w.rowRange(0, m_phi_size - 1).dot(phi_1(x, 0, t, t+1));
 		D0(0, t, t+1) = D1;
+		Mem(mapChar2Idx[x.m_charSeq[0]], t, t + 1);
 	}
 
 	// The assumption is that two consecutive chars span the following interval [t-l1-l2+1,t-l1],[t-l1,t], 
@@ -271,20 +278,30 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	for (int i = 1; i < C; i++) 
 	{
 		uchar asciiCode = x.m_charSeq[i];
+		cout << asciiCode;
 		chMinCols = m_trData.getMinWidth(x.m_charSeq[i]);
 		chMaxCols = m_trData.getMaxWidth(x.m_charSeq[i]);
+		int prevChMinCols = m_trData.getMinWidth(x.m_charSeq[i - 1]);
+		int prevChMaxCols = m_trData.getMaxWidth(x.m_charSeq[i - 1]);
 
-		cout << i << ":handling " << asciiCode << endl;
 		for (int t = chMinCols; t < T; ++t)
 		{
 			int stop_l1_at = _min(t, _min(T, chMaxCols));
 			for (int l1 = chMinCols; l1 <= stop_l1_at; ++l1)
 			{
+				auto memValue = Mem(mapChar2Idx[asciiCode], t, l1);
+				if (memValue > MISPAR_KATAN_MEOD)
+				{
+					D1 = memValue;
+				}
+				else
+				{
 				D1 = m_w.rowRange(0, m_phi_size - 1).dot(phi_1(x, i, t, l1));
+					Mem(mapChar2Idx[asciiCode], t, l1) = D1;
+				}
+				
 				D2_max = MISPAR_KATAN_MEOD;
 
-				int prevChMinCols = m_trData.getMinWidth(x.m_charSeq[i-1]);
-				int prevChMaxCols = m_trData.getMaxWidth(x.m_charSeq[i-1]);
 				for (int l2 = prevChMinCols; l2 <= _min(t-l1+1, _min(T, prevChMaxCols)); ++l2)
 				{
 					D2 = D0(i - 1, t - l1, l2) + m_w.at<double>(m_phi_size - 1)*phi_2(x, i, t, l1, l2);
@@ -299,7 +316,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 			}
 		}
 	}
-
+	cout << endl;
 	// Termination
 	std::vector<int> pred_l(C);
 	std::vector<int> pred_t(C);

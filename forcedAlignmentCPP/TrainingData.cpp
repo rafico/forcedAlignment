@@ -21,22 +21,30 @@ TrainingData::TrainingData()
 	}
 
 	StringVector training_file_list;
+	StringVector validation_file_list;
 	training_file_list.read(m_params.m_pathTrainingFiles);
+	validation_file_list.read(m_params.m_pathValidationFiles);
 
-	for (const auto &fileName : training_file_list)
+	loadDocs(training_file_list, m_trainingDocs, m_file2trDoc);
+	loadDocs(validation_file_list, m_trainingDocs, m_file2trDoc);
+
+	combineChars();
+	//displayTrainingData();
+	//writeQueriesAndDocsGTPfiles();
+}
+
+void TrainingData::loadDocs(const StringVector& file_list, vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap)
+{
+	for (const auto &fileName : file_list)
 	{
 		cout << "Loading " << fileName << endl;
 		string name = path(fileName).stem().string();
 		string imgFileName = m_params.m_pathImages + name + ".jpg";
 		Doc doc(imgFileName);
 		doc.loadXml(m_params.m_pathGT + fileName);
-		m_trainingDocs.push_back(Doc(doc));
-		m_file2Doc.insert({ name, m_trainingDocs.size()-1});
+		docCont.push_back(Doc(doc));
+		file2DocMap.insert({ name, docCont.size() - 1 });
 	}
-
-	combineChars();
-	//displayTrainingData();
-	//writeQueriesAndDocsGTPfiles();
 }
 
 void TrainingData::combineChars()
@@ -149,7 +157,7 @@ double TrainingData::getMaxWidth(uchar asciiCode)
 }
 	else
 	{
-		return 300;
+		return 410;
 	}
 }
 
@@ -170,17 +178,13 @@ double TrainingData::getMeanHeight(uchar asciiCode)
 
 const Doc *TrainingData::getDocByName(string docName)
 {
-	size_t idx = 0;
-	auto iter = m_file2Doc.find(docName);
-	if (iter == m_file2Doc.end())
+	Doc *ptr = nullptr;
+	auto iter = m_file2trDoc.find(docName);
+	if (iter != m_file2trDoc.end())
 	{
-		return nullptr;
+		ptr = &m_trainingDocs[iter->second];
 	}
-	else
-	{
-		idx = iter->second;
-	}
-	return &m_trainingDocs[idx];
+	return ptr;
 }
 
 void TrainingData::writeQueriesAndDocsGTPfiles()

@@ -22,9 +22,6 @@ class TrainingData : public Singleton<TrainingData>
 {
 	friend class Singleton<TrainingData>;
 
-private:
-	TrainingData();
-
 public:
 	void combineChars();
 	
@@ -46,11 +43,15 @@ public:
 	void displayTrainingData();
 
 private:
+	TrainingData();
+	void loadDocs(const StringVector& file_list, vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap);
+
 	TrainingCharsCont m_charInstances;
 	const Params& m_params;
+
 	vector<Doc> m_trainingDocs;
 
-	unordered_map<string, size_t> m_file2Doc;
+	unordered_map<string, size_t> m_file2trDoc;
 };
 
 #endif // !_H_TRAINING_CHARS_H__
