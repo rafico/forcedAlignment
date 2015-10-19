@@ -28,12 +28,13 @@ private:
 		m_overlap(0.5),
 
 #if _WIN32 || _WIN64
-		m_datasetPath("D:/Dropbox/PhD/datasets/" + m_dataset + "/"),
+		m_datasetPath("D:/datasets/" + m_dataset + "/"),
 #elif __GNUC__
 		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
 #endif
 		m_pathImages(m_datasetPath + "images/"),
 		m_pathGT(m_datasetPath + "ground_truth/"),
+		m_pathCharLocation(m_pathGT + "char_location/"),
 		m_pathData("data/"),
 		m_pathResultsParent(m_pathData + "results/"),
 		m_pathResults(m_pathResultsParent + m_dataset + "/"),
@@ -41,8 +42,6 @@ private:
 		m_pathCharModels(m_pathData + "charModels" + "_" + m_dataset + "_" + "sbin" + std::to_string(m_sbin) + "/"),
 		m_pathTranscription(m_pathGT + "transcription.txt"),
 		m_pathStartTime(m_pathGT + "charStartTime.txt"),
-		m_pathTrainingFiles(m_pathGT + "training_file_list.txt"),
-		m_pathValidationFiles(m_pathGT + "validation_file_list.txt"),
 		m_pathLineImages(m_datasetPath + m_pathData + "line_images/"),
 		m_pathLineBinImages(m_datasetPath + m_pathData + "line_images_binarized/")
 	{
@@ -73,6 +72,7 @@ public:
 	string m_datasetPath;
 	string m_pathImages;
 	string m_pathGT;
+	string m_pathCharLocation;
 	string m_pathData;
 	string m_pathResultsParent;
 	string m_pathResults;
@@ -80,8 +80,6 @@ public:
 	string m_pathCharModels;
 	string m_pathTranscription;
 	string m_pathStartTime;
-	string m_pathTrainingFiles;
-	string m_pathValidationFiles;
 	string m_pathLineImages;
 	string m_pathLineBinImages;
 };

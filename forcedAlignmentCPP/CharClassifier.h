@@ -25,7 +25,7 @@ private:
 	void NormalizeFeatures(Mat & features);
 	void samplePos(const Mat &imDoc, Mat &trHOGs, size_t &position, const Rect &loc, Size sz);
 	void sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, const HogSvmModel &hs_model);
-	void trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, size_t numSamples, size_t numTrWords);
+	void trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, size_t numSamples, size_t numTrWords, string svmlib);
 
 	const Params& m_params;
 	TrainingData &m_trData;

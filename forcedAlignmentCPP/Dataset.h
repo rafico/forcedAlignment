@@ -84,6 +84,7 @@ struct AnnotatedLine : Doc
 	Mat m_fixedScores;
 
 	CharSequence m_charSeq;
+	string m_lineId;
 };
 
 /***********************************************************************/
@@ -91,14 +92,12 @@ struct AnnotatedLine : Doc
 class Dataset
 {
 public:
-	Dataset();
-	void readTrLine(AnnotatedLine &x, StartTimeSequence &y);
-	void readValLine(AnnotatedLine &x, StartTimeSequence &y);
+	Dataset(string file_list, string start_times_file);
+	void read(AnnotatedLine &x, StartTimeSequence &y);
+	void read(AnnotatedLine &x, StartTimeSequence &y, int lineNum);
+	size_t size() { return m_lineIds.size(); }
+	bool labels_given() { return m_read_labels; }
 
-	size_t trSize() { return m_valStartIndex; }
-	size_t valSize() { return m_lineIds.size() - m_valStartIndex; }
-
-	void resetValIndex();
 private:
 
 	struct Example
@@ -110,19 +109,17 @@ private:
 	void parseFiles();
 	void loadImageAndcomputeScores(AnnotatedLine &x);
 	void computeFixedScores(AnnotatedLine &x);
-	void readLine(AnnotatedLine &x, StartTimeSequence &y, int line_index);
-	
-	StringVector m_training_file_list;
-	StringVector m_validation_file_list;
+	void loadStartTimes(Example &example, const string docName, int lineNum, const StartTimeSequence& startTimeAndEndTime);
 
+	StringVector m_file_list;
 	StringVector m_transcription_file;
 	StringVector m_start_times_file;
-	int m_current_tr_line;
-	int m_current_val_line;
+	int m_current_file;
+	int m_current_line;
+	bool m_read_labels;
 
 	unordered_map<string, Example> m_examples;
 	vector<string> m_lineIds;
-	int m_valStartIndex;
 
 	Params &m_params;
 	TrainingData &m_trData;

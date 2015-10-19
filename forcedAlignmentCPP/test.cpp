@@ -5,7 +5,7 @@
 #include "CharClassifier.h"
 #include "Classifier.h"
 #include "Dataset.h"
-#include "ForcedAlignmentTrain.h"
+#include "ForcedAlignment.h"
 #include "Doc.h"
 #include "CharSpotting.h"
 
@@ -14,8 +14,8 @@ using namespace cv;
 
 int main(int argc, char** argv)
 {
-	
-	ForcedAlignmentTrain::train();
+	ForcedAlignment fa;
+	fa.decode();
 
 	//CharSpotting sp;
 	//sp.evaluateModels();

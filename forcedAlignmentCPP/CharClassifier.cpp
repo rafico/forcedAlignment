@@ -114,7 +114,7 @@ void CharClassifier::sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, con
 	}
 }
 
-void CharClassifier::trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, size_t numSamples, size_t numTrWords)
+void CharClassifier::trainClassifier(const Mat &trHOGs, HogSvmModel &hs_model, size_t numSamples, size_t numTrWords, string svmlib)
 {
 	random_device rd;
 	mt19937 gen(rd());
@@ -232,7 +232,8 @@ HogSvmModel CharClassifier::learnModel(uchar asciiCode)
 	// Apply L2 - norm.
 	NormalizeFeatures(trHOGs);
 	
-	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords*chVec.size());
+	string svmlib = (chVec.size() == 1) ? "bl" : m_params.m_svmlib;
+	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords*chVec.size(), svmlib);
 
 	hs_model.save2File();
 	return hs_model;
@@ -268,7 +269,7 @@ HogSvmModel CharClassifier::learnExemplarModel(const Doc& doc, const Character& 
 
 	// Train the (SVM) Classifier
 	int numSamples = m_params.m_numTrWords + m_numNWords;
-	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords);
+	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords, m_params.m_svmlib);
 	
 	return hs_model;
 }

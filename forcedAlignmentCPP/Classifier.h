@@ -14,8 +14,8 @@ class Classifier
 {
 public:
 	Classifier(double _min_sqrt_gamma, std::string _loss_type);
-	void load(std::string &filename);
-	void save(std::string &filename);
+	void load(const std::string &filename);
+	void save(const std::string &filename);
 	bool was_changed() { return m_w_changed; }
 	double update(AnnotatedLine& x, StartTimeSequence &y, StartTimeSequence &y_hat);
 	double predict(AnnotatedLine& x, StartTimeSequence &y_hat);

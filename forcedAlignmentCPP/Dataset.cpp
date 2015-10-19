@@ -126,20 +126,25 @@ Inputs:       std::string dataset_filename
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-Dataset::Dataset()
-	: m_current_tr_line(0),
-	m_current_val_line(0),
-	m_valStartIndex(-1),
+Dataset::Dataset(string file_list, string start_times_file)
+	: m_current_line(0),
+	m_read_labels(false),
 	m_params(Params::getInstance()), 
 	m_trData(TrainingData::getInstance())
 {
 	// Read list of files into StringVector
-	m_training_file_list.read(m_params.m_pathTrainingFiles);
-	m_validation_file_list.read(m_params.m_pathValidationFiles);
+	m_file_list.read(m_params.m_pathGT + file_list);
 
 	// reading file content into StringVector
 	m_transcription_file.read(m_params.m_pathTranscription);
+	if (!start_times_file.empty())
+	{
 	m_start_times_file.read(m_params.m_pathStartTime);
+		m_read_labels = true;
+	}
+		
+	sort(begin(m_transcription_file), end(m_transcription_file));
+	sort(begin(m_start_times_file), end(m_start_times_file));
 	parseFiles();
 }
 
@@ -152,19 +157,9 @@ Inputs:       AnnotatedLine&, StartTimeSequence&
 Output:       void.
 Comments:     none.
 ***********************************************************************/
-void Dataset::readTrLine(AnnotatedLine &x, StartTimeSequence &y)
+void Dataset::read(AnnotatedLine &x, StartTimeSequence &y, int lineNum)
 {
-	readLine(x, y, m_current_tr_line++);
-}
-
-void Dataset::readValLine(AnnotatedLine &x, StartTimeSequence &y)
-{
-	readLine(x, y, m_valStartIndex +  m_current_val_line++);
-}
-
-void Dataset::readLine(AnnotatedLine &x, StartTimeSequence &y, int line_index)
-{
-	string lineId = m_lineIds[line_index];
+	string lineId = m_lineIds[lineNum];
 	
 	auto iter = m_examples.find(lineId);
 	if (iter == m_examples.end())
@@ -179,11 +174,14 @@ void Dataset::readLine(AnnotatedLine &x, StartTimeSequence &y, int line_index)
 
 	int x_shift = x.m_xIni;
 	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });	
+
+	x.m_lineId = lineId;
 }
 
-void Dataset::resetValIndex()
+
+void Dataset::read(AnnotatedLine &x, StartTimeSequence &y)
 {
-	m_current_val_line = 0;
+	read(x, y, m_current_line++);
 }
 
 std::ostream& operator<< (std::ostream& os, const IntVector& v)
@@ -194,41 +192,59 @@ std::ostream& operator<< (std::ostream& os, const IntVector& v)
 
 void Dataset::parseFiles()
 {
-	for (size_t index = 0; index < m_start_times_file.size(); ++index)
+	for (auto fileName : m_file_list)
 	{
-		stringstream ssStartTime(m_start_times_file[index]);
-		stringstream ssTranscription(m_transcription_file[index]);
+		auto p = std::lower_bound(begin(m_transcription_file), end(m_transcription_file), fileName);
+		string docName;
+		string lineId;
 
-		string lineId, lindIdTranscription;
-		ssStartTime >> lineId;
-		ssTranscription >> lindIdTranscription;
-		if (lineId.compare(lindIdTranscription))
+		stringstream ssTranscription(*p++);
+		ssTranscription >> lineId;
+		docName = lineId.substr(0, lineId.find_last_of("-"));
+		while (p != m_transcription_file.end() && docName.compare(fileName) == 0)
 		{
-			cerr << "Transcript file and start_time file are not synchronized.\n";
-		}
+			string transcriptionString;
+			ssTranscription >> transcriptionString;
 		Example example;
+			example.m_line.m_charSeq.from_string(transcriptionString);
+			example.m_line.m_pathImage = m_params.m_pathLineImages + lineId + ".png";
 
+			m_examples.insert({ lineId, example });
+			m_lineIds.push_back(lineId);
+
+			ssTranscription.str(*p++);
+			ssTranscription >> lineId;
+			docName = lineId.substr(0, lineId.find_last_of("-"));
+		}
+	}
+	if (m_read_labels)
+	{
+		for (auto lineId : m_lineIds)
+		{
+			auto p = std::lower_bound(begin(m_start_times_file), end(m_start_times_file), lineId);
+			if (p == m_start_times_file.end())
+			{
+				cerr << "Could not find line: " << lineId << " in start times file." << endl;
+			}
+			stringstream ssStartTime(*p);
+			string dummyLineId;
+			ssStartTime >> dummyLineId;
 		StartTimeSequence startTimeAndEndTime;
 		startTimeAndEndTime.assign((istream_iterator<int>(ssStartTime)), (istream_iterator<int>()));
-
-		string transcriptionString;
-		ssTranscription >> transcriptionString;
-		example.m_line.m_charSeq.from_string(transcriptionString);
-
-		example.m_line.m_pathImage = m_params.m_pathLineImages + lineId + ".png";
 
 		size_t found = lineId.find_last_of("-");
 		string docName = lineId.substr(0, found);
 		int lineNum = stoi(lineId.substr(found + 1));
 
-		auto iter = find(m_validation_file_list.begin(), m_validation_file_list.end(), docName+".xml");
-		{
-			if (iter != m_validation_file_list.end() && m_valStartIndex == -1)
-			{
-				m_valStartIndex = index;
+			Example &example = m_examples[lineId];
+			loadStartTimes(example, docName, lineNum, startTimeAndEndTime);
+		}
 			}
 		}
 
+
+void Dataset::loadStartTimes(Example &example, string docName, int lineNum, const StartTimeSequence& startTimeAndEndTime)
+{
 		const Doc *doc = m_trData.getDocByName(docName);
 		if (doc != nullptr)
 		{
@@ -269,10 +285,6 @@ void Dataset::parseFiles()
 
 			int endTime = startTimeAndEndTime[2 * (timeSeqIdx - 1)] + startTimeAndEndTime[2 * timeSeqIdx - 1] + 1;
 			example.m_time_seq.push_back(endTime);
-
-		m_examples.insert({lineId, example});
-		m_lineIds.push_back(lineId);
-	}
 	}
 }
 
@@ -322,11 +334,13 @@ void Dataset::loadImageAndcomputeScores(AnnotatedLine &x)
 
 void Dataset::computeFixedScores(AnnotatedLine &x)
 {
-	// row 0 - projection profile
-	// row 1 - connected components 
+	// row 0 - projection profile (start char)
+	// row 1 - connected components (start char)
 	// row 2 - integral projection profile.
+	// row 3 - projection profile (end char)
+	// row 4 - connected components (end char)
 
-	x.m_fixedScores = Mat::zeros(3, x.m_W, CV_64F);
+	x.m_fixedScores = Mat::zeros(5, x.m_W, CV_64F);
 
 			const int intervalSz = 5;
 
@@ -338,6 +352,7 @@ void Dataset::computeFixedScores(AnnotatedLine &x)
 			Mat pp;
 			reduce(bin, pp, 0, CV_REDUCE_SUM, CV_64F);
 	Mat ppMat = x.m_fixedScores.rowRange(Range(0, 1));
+	Mat ppEndMat = x.m_fixedScores.rowRange(Range(3, 4));
 			for (int i = 0; i < pp.cols; ++i)
 			{
 				bool localMin = true;
@@ -351,10 +366,15 @@ void Dataset::computeFixedScores(AnnotatedLine &x)
 				{
 			ppMat.colRange(std::max(i - intervalSz + 2, 0), std::min(int(i + intervalSz + 1), pp.cols)) = 1;
 	}
+		if (localMin && currentVal < pp.at<double>(std::max(i - 1, 0)))
+		{
+			ppEndMat.colRange(std::max(i - intervalSz + 2, 0), std::min(int(i + intervalSz + 1), pp.cols)) = 1;
+		}
 }
 
 			// computing score using CC's
 	Mat ccMat = x.m_fixedScores.rowRange(Range(1, 2));
+	Mat ccEndMat = x.m_fixedScores.rowRange(Range(4, 5));
 			Mat labels;
 			connectedComponents(bin.t(), labels);
 			transpose(labels, labels);
@@ -380,9 +400,17 @@ void Dataset::computeFixedScores(AnnotatedLine &x)
 			{
 			ccMat.colRange(std::max(colIdx - intervalSz + 1, 0), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
 				}
+		diff.clear();
+
+		set_difference(current.begin(), current.end(), next.begin(), next.end(), inserter(diff, diff.begin()));
+		if (!diff.empty())
+		{
+			ccEndMat.colRange(std::max(colIdx - intervalSz + 1, 0), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
+		}
+		diff.clear();
+
 				current = move(next);
 				next.clear(); 
-				diff.clear();
 			}
 
 	// computing integral Projection Profile

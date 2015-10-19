@@ -20,30 +20,35 @@ TrainingData::TrainingData()
 		return;
 	}
 
-	StringVector training_file_list;
-	StringVector validation_file_list;
-	training_file_list.read(m_params.m_pathTrainingFiles);
-	validation_file_list.read(m_params.m_pathValidationFiles);
-
-	loadDocs(training_file_list, m_trainingDocs, m_file2trDoc);
-	loadDocs(validation_file_list, m_trainingDocs, m_file2trDoc);
+	loadDocs(m_trainingDocs, m_file2trDoc);
 
 	combineChars();
-	//displayTrainingData();
+	displayTrainingData();
 	//writeQueriesAndDocsGTPfiles();
 }
 
-void TrainingData::loadDocs(const StringVector& file_list, vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap)
+void TrainingData::loadDocs(vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap)
 {
-	for (const auto &fileName : file_list)
+	path dir_path(m_params.m_pathCharLocation);
+	if (!exists(dir_path))
 	{
+		cerr << "Error: Unable to read models from " << m_params.m_pathGT << std::endl;
+		return;
+	}
+
+	directory_iterator end_itr; // default construction yields past-the-end
+	for (directory_iterator itr(dir_path); itr != end_itr; ++itr)
+	{
+		if (itr->path().extension() == ".xml")
+	{
+			string fileName = itr->path().filename().stem().string();
 		cout << "Loading " << fileName << endl;
-		string name = path(fileName).stem().string();
-		string imgFileName = m_params.m_pathImages + name + ".jpg";
+			string imgFileName = m_params.m_pathImages + fileName + ".jpg";
 		Doc doc(imgFileName);
-		doc.loadXml(m_params.m_pathGT + fileName);
+			doc.loadXml(m_params.m_pathCharLocation + fileName + ".xml");
 		docCont.push_back(Doc(doc));
-		file2DocMap.insert({ name, docCont.size() - 1 });
+			file2DocMap.insert({ fileName, docCont.size() - 1 });
+		}
 	}
 }
 
@@ -215,31 +220,40 @@ void TrainingData::writeQueriesAndDocsGTPfiles()
 // TODO: iterate over the docs/word/line and write to each char where it came from.
 void TrainingData::displayTrainingData()
 {
-	for (auto &ch : m_charInstances)
+	for (size_t docNum = 0; docNum < m_trainingDocs.size(); ++docNum)
 	{
-		uchar asciiCode = ch.first;
-		string pathString = m_params.m_pathData + char(asciiCode) + "_" + std::to_string(asciiCode) + "/";
-		path dir(pathString);
-		if (!exists(dir))
-		if (boost::filesystem::create_directory(dir))
+		const Doc &doc = m_trainingDocs[docNum];
+		string docName = path(doc.m_pathImage).stem().string();
+		const Mat &imDoc = doc.m_origImage;
+		for (size_t lineNum = 0; lineNum < doc.m_lines.size();  ++lineNum)
+	{
+			auto &line = doc.m_lines[lineNum];
+			for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++wordIdx)
 		{
-			std::cout << "Success in creating " << dir.string() << "\n";
-		}
-		for (size_t i = 0; i < ch.second.m_instances.size(); ++i)
+				const Word &word = doc.m_words[line.m_wordIndices[wordIdx]];
+				for (auto &chIdx : word.m_charIndices)
 		{
-			auto &ci = ch.second.m_instances[i];
-
-			Doc &doc = m_trainingDocs[ci.m_docNum];
-			Mat &imDoc = doc.m_origImage;
+					auto ci = doc.m_chars[chIdx];
+					uchar asciiCode = ci.m_asciiCode;
 			Rect loc = ci.m_loc;
-
 			auto x1 = loc.x;
 			auto x2 = loc.x + loc.width;
 			auto y1 = loc.y;
 			auto y2 = loc.y + loc.height;
 			Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
 
-			imwrite(pathString + to_string(i)+".png", im);
+					string pathString = m_params.m_pathData + char(asciiCode) + "_" + std::to_string(asciiCode) + "/";
+					path dir(pathString);
+					if (!exists(dir))
+					{
+						if (boost::filesystem::create_directory(dir))
+						{
+							std::cout << "Success in creating " << dir.string() << "\n";
+						}
+					}
+					imwrite(pathString + docName + "_" + to_string(lineNum) + "_" + to_string(wordIdx) + ".png", im);
+				}
+			}
 		}
 	}
 }

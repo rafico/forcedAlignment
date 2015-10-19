@@ -175,10 +175,11 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 	{
 		double prevVal = (startCell == 0) ? 0 : x.m_fixedScores.at<double>(2, startCell - 1);
 		double currentVal = x.m_fixedScores.at<double>(2, endCell);
-		double ppScore = exp(-(currentVal - prevVal)/(endCell - startCell));
+		double ppScore = exp(-(currentVal - prevVal)/(endCell - startCell+1));
 
-		v.at<double>(2) = x.m_fixedScores.at<double>(1, startCell) + x.m_fixedScores.at<double>(1, endCell);
-		v.at<double>(1) = ppScore;
+		v.at<double>(0) = ppScore;
+		v.at<double>(1) = x.m_fixedScores.at<double>(3, startCell);
+		v.at<double>(2) = x.m_fixedScores.at<double>(4, startCell);
 	}
 
 	v.at<double>(3) = lengthLikelihood;
@@ -241,7 +242,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 		
 	int C = x.m_charSeq.size();
 	int T = x.m_W;
-	int L = 5*maxNumCols + 1;
+	int L = std::max(410, 5 * maxNumCols)+1;
 	threeDimArray<int> prev_l(C, T, L); // the value of l2 for back-tracking
 	threeDimArray<int> prev_t(C, T, L); // the value of t2 for back-tracking
 	threeDimArray<double> D0(C, T, L); // char i finished at time t and started at t-l+1
@@ -566,16 +567,24 @@ Inputs:       string & filename
 Output:       none.
 Comments:     none.
 ***********************************************************************/
-void Classifier::load(std::string &filename)
+void Classifier::load(const std::string &filename)
 {
 	std::ifstream ifs;
 	ifs.open(filename.c_str());
-	if (!ifs.good()) {
+	if (!ifs.good()) 
+	{
 		std::cerr << "Unable to open " << filename << std::endl;
 		exit(-1);
 	}
 
-	//ifs >> m_w;
+	for (int i = 0; i < m_phi_size; ++i)
+	{
+		char ch;
+		ifs >> ch;
+		double num;
+		ifs >> num;
+		m_w.at<double>(i) = num;
+	}
 
 	ifs.close();
 }
@@ -588,7 +597,7 @@ Inputs:       string & filename
 Output:       none.
 Comments:     none.
 ***********************************************************************/
-void Classifier::save(std::string &filename)
+void Classifier::save(const std::string &filename)
 {
 	std::ofstream ifs;
 	ifs.open(filename.c_str());

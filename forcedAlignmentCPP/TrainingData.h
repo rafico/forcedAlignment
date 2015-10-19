@@ -44,13 +44,12 @@ public:
 
 private:
 	TrainingData();
-	void loadDocs(const StringVector& file_list, vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap);
+	void loadDocs(vector<Doc> &docCont, unordered_map<string, size_t> &file2DocMap);
 
 	TrainingCharsCont m_charInstances;
 	const Params& m_params;
 
 	vector<Doc> m_trainingDocs;
-
 	unordered_map<string, size_t> m_file2trDoc;
 };
 
