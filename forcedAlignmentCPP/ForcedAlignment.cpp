@@ -161,7 +161,7 @@ void ForcedAlignment::decode()
 		}
 		// cout << "confidence= " << confidence << endl;
 		drawSegResult(x, y_hat, params.m_pathResultsImages+"alignment/"+ x.m_lineId + ".png");
-		resultFile << x.m_lineId << " " << y_hat << endl;
+		resultFile << x.m_lineId << " " << confidence << " " << y_hat << endl;
 		
 		resultFischerFile << x.m_lineId << " ";
 		bool startWord = true;
