@@ -13,7 +13,6 @@ Purpose:  Defines the data structs of instance and label
 #include <unordered_map>
 #include "CharClassifier.h"
 
-
 class IntVector : public std::vector<int> {
 public:
 	unsigned int read(std::string &filename) {
@@ -48,7 +47,8 @@ std::ostream& operator<< (std::ostream& os, const IntVector& v);
 class CharSequence : public vector<uchar>
 {
 public:
-	void from_string(const string &char_string);
+	void from_acc_trans(const string &char_string);
+	void from_in_acc_trans(const string &char_string);
 
 public:
 	static unsigned int m_num_chars;
@@ -80,6 +80,8 @@ struct AnnotatedLine : Doc
 		Mat m_scoreVals;
 	};
 
+	void InitCombinedImg(string pathImage, string binPath, Mat lineEnd, Mat lineEndBin);
+
 	unordered_map<uchar, scoresType> m_scores;
 	Mat m_fixedScores;
 
@@ -92,11 +94,13 @@ struct AnnotatedLine : Doc
 class Dataset
 {
 public:
-	Dataset(string file_list, string start_times_file);
+	Dataset(string file_list, string start_times_file, bool accTrans = true);
 	void read(AnnotatedLine &x, StartTimeSequence &y);
 	void read(AnnotatedLine &x, StartTimeSequence &y, int lineNum);
+	void read(AnnotatedLine &x, Mat &lineEnd, Mat &lineEndBin, StartTimeSequence &y, int lineNum);
 	size_t size() { return m_lineIds.size(); }
 	bool labels_given() { return m_read_labels; }
+	void computeScores(AnnotatedLine &x, const CharSequence *charSeq=nullptr);
 
 private:
 
@@ -107,7 +111,7 @@ private:
 	};
 
 	void parseFiles();
-	void loadImageAndcomputeScores(AnnotatedLine &x);
+	
 	void computeFixedScores(AnnotatedLine &x);
 	void loadStartTimes(Example &example, const string docName, int lineNum, const StartTimeSequence& startTimeAndEndTime);
 
@@ -117,6 +121,7 @@ private:
 	int m_current_file;
 	int m_current_line;
 	bool m_read_labels;
+	bool m_accTrans;
 
 	unordered_map<string, Example> m_examples;
 	vector<string> m_lineIds;

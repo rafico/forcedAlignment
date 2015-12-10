@@ -3,10 +3,12 @@
 #include "HogUtils.h"
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <boost/filesystem.hpp>
 #include <algorithm>
 
 using namespace cv;
 namespace pt = boost::property_tree;
+using namespace boost::filesystem;
 
 /*
 Given a rect [x,y,w,h],
@@ -88,7 +90,7 @@ Doc::Doc(string pathImage)
 	Init(pathImage);
 }
 
-void Doc::Init(string pathImage)
+void Doc::Init(string pathImage, string binPath /* =  "" */)
 {
 	m_featuresComputed = false;
 	m_origImage = imread(pathImage);
@@ -99,6 +101,13 @@ void Doc::Init(string pathImage)
 	}
 	m_H = m_origImage.rows;
 	m_W = m_origImage.cols;
+
+	if (!binPath.empty())
+	{
+		path p(m_pathImage);
+		string binImgPath = binPath + p.stem().string() + ".png";
+		m_bin = cv::imread(binImgPath, CV_LOAD_IMAGE_GRAYSCALE);
+	}
 }
 
 void Doc::resizeDoc(uint sbin)
@@ -128,6 +137,11 @@ void Doc::resizeDoc(uint sbin)
 	m_xIni = padXini;
 	m_H = m_image.rows;
 	m_W = m_image.cols;
+
+	if (m_bin.data != NULL)
+	{
+		m_bin = m_bin(Range(m_yIni, m_image.rows + m_yIni), Range(m_xIni, m_image.cols + m_xIni));
+	}
 }
 
 void Doc::computeFeatures(uint sbin)
@@ -300,4 +314,15 @@ std::ostream& operator<< (std::ostream& os, const Doc& doc)
 		os << endl;
 	}
 	return os;
+}
+
+int Doc::getRightmostBinCol()
+{
+	Mat pp;
+	reduce(m_bin, pp, 0, CV_REDUCE_MAX, CV_8U);
+	vector<double> v{ 255 };
+	auto *pLine = pp.ptr<uchar>(0);
+	auto result = std::find_end(pLine, pLine + m_bin.cols, v.begin(), v.end());
+	int dist = std::distance(pLine, result);
+	return dist;
 }

@@ -9,6 +9,7 @@
 #include "Params.h"
 #include "Classifier.h"
 #include "CharClassifier.h"
+#include "HogUtils.h"
 
 using namespace boost::filesystem;
 
@@ -21,8 +22,8 @@ void ForcedAlignment::train()
 	double epsilon = 0;
 
 	string loss_type = "alignment_loss";
-	string training_file_list = "training_file_list.txt";
-	string validation_file_list = "validation_file_list.txt";
+	string training_file_list = "train.txt";
+	string validation_file_list = "valid.txt";
 	string start_times_file = "charStartTime.txt";
 
 	// Initiate classifier
@@ -117,7 +118,7 @@ void ForcedAlignment::decode()
 {
 	const Params &params = Params::getInstance();
 
-	string training_file_list = "test_file_list.txt";
+	string test_file_list = "test.txt";
 	string loss_type = "alignment_loss";
 	std::ofstream resultFile;
 	std::ofstream resultFischerFile;
@@ -137,12 +138,11 @@ void ForcedAlignment::decode()
 	classifier.load(m_classifier_filename);
 	
 	// beginning of the test set
-	Dataset test_dataset(training_file_list, "");
+	Dataset test_dataset(test_file_list, "");
 
 	// Run over all dataset
 	for (uint i = 0; i < test_dataset.size(); i++) 
 	{
-
 		AnnotatedLine x;
 		StartTimeSequence y;
 		StartTimeSequence y_hat;
@@ -162,6 +162,7 @@ void ForcedAlignment::decode()
 		// cout << "confidence= " << confidence << endl;
 		drawSegResult(x, y_hat, params.m_pathResultsImages+"alignment/"+ x.m_lineId + ".png");
 		resultFile << x.m_lineId << " " << confidence << " " << y_hat << endl;
+		printConfidencePerChar(x, y_hat);
 		
 		resultFischerFile << x.m_lineId << " ";
 		bool startWord = true;
@@ -233,6 +234,107 @@ void ForcedAlignment::decode()
 	cout << "Done." << endl;
 }
 
+void ForcedAlignment::inAccDecode()
+{
+	const Params &params = Params::getInstance();
+
+	string test_file_list = "test.txt";
+	string loss_type = "alignment_loss";
+	std::ofstream resultFile;
+	std::ofstream resultFischerFile;
+
+	path p(params.m_pathResultsImages + "alignment/");
+	if (!exists(p.parent_path()))
+	{
+		boost::filesystem::create_directory(p.parent_path());
+	}
+
+	resultFile.open(p.string() + "result.txt", std::fstream::app);
+	resultFischerFile.open(p.string() + "resultFischerFile.txt", std::fstream::out);
+
+	// Initiate classifier
+
+	Classifier classifier(0, loss_type, false);
+	classifier.load(m_classifier_filename);
+
+	// beginning of the test set
+	Dataset test_dataset(test_file_list, "", false);
+
+	Mat lineEnd;
+	Mat lineEndBin;
+	AnnotatedLine prevX;
+
+
+	// Run over all dataset
+	for (uint i = 0; i < test_dataset.size(); ++i)
+	{
+		AnnotatedLine x;
+		StartTimeSequence y;
+		StartTimeSequence y_hat;
+
+		cout << "==================================================================================" << endl;
+
+		// read next example for dataset
+		test_dataset.read(x, lineEnd, lineEndBin, y, i);
+		y_hat.resize(x.m_charSeq.size());
+
+		// predict label 
+		double confidence = classifier.predict(x, y_hat);
+		if (test_dataset.labels_given())
+		{
+			cout << "alignment= " << y << endl;
+		}
+		// cout << "confidence= " << confidence << endl;
+		drawSegResult(x, y_hat, params.m_pathResultsImages + "alignment/" + x.m_lineId + ".png");
+		//resultFile << x.m_lineId << " " << confidence << " " << y_hat << endl;
+		//printConfidencePerChar(x, y_hat);
+
+		// Have we located chars in the previous lineEnd ?
+		uint last_loc_from_prev_line;
+		for (last_loc_from_prev_line = 0; y_hat[last_loc_from_prev_line + 1] < lineEnd.cols; ++last_loc_from_prev_line);
+		if (last_loc_from_prev_line)
+		{
+			// recomputing the alignmnet for the previous line.
+			CharSequence addedChars;
+			addedChars.assign(x.m_charSeq.begin() + 1, x.m_charSeq.begin() + last_loc_from_prev_line + 1);
+			test_dataset.computeScores(prevX, &addedChars);
+			prevX.m_charSeq.insert(prevX.m_charSeq.end(), addedChars.begin(), addedChars.end());
+			prevX.m_charSeq.push_back('|');
+			StartTimeSequence prev_y_hat;
+			prev_y_hat.resize(prevX.m_charSeq.size());
+			confidence = classifier.predict(prevX, prev_y_hat, true);
+			drawSegResult(prevX, prev_y_hat, params.m_pathResultsImages + "alignment/" + prevX.m_lineId + ".png");
+			
+			// recomputing the alignment for the current line.
+			test_dataset.read(x, y, i);
+			x.m_charSeq.erase(x.m_charSeq.begin() + 1, x.m_charSeq.begin() + last_loc_from_prev_line + 1);
+			y_hat.resize(x.m_charSeq.size());
+			confidence = classifier.predict(x, y_hat);
+			drawSegResult(x, y_hat, params.m_pathResultsImages + "alignment/" + x.m_lineId + ".png");
+		}
+
+		auto lastCol = x.getRightmostBinCol();
+		uint lineEndCol = std::min(lastCol + 2, x.m_image.cols);
+
+		if (lineEndCol > y_hat.back())
+		{
+			lineEnd = x.m_image.colRange(Range(y_hat.back(), lineEndCol));
+			lineEndBin = x.m_bin.colRange(Range(y_hat.back(), lineEndCol));
+		}
+		else
+		{
+			lineEndBin = lineEnd = Mat();
+		}
+		prevX = x;
+		//cout << "aligned_phoneme_score= " << classifier.aligned_phoneme_scores(x, y_hat) << endl;
+	}
+
+	resultFile.close();
+	resultFischerFile.close();
+
+	cout << "Done." << endl;
+}
+
 void ForcedAlignment::drawSegResult(const AnnotatedLine &x, const StartTimeSequence &y, const StartTimeSequence &y_hat)
 {
 	Mat img = x.m_image.clone();
@@ -257,16 +359,18 @@ void ForcedAlignment::drawSegResult(const AnnotatedLine &x, const StartTimeSeque
 	//cv::Scalar blue(255, 0, 0);
 	Mat img = x.m_image.clone();
 	bool startWord = true;
+	int lineWidth = 1;
+
 	for (size_t i = 1; i < y.size(); ++i)
 	{
 		if (x.m_charSeq[i] == '|' || startWord)
 		{
-			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), red);
+			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), red, lineWidth);
 			startWord = x.m_charSeq[i] == '|';
 		}
 		else
 		{
-			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), green);
+			line(img, cv::Point(y[i], 0), cv::Point(y[i], img.rows), green, lineWidth);
 		}
 	}
 	path p(resultPath);
@@ -275,4 +379,36 @@ void ForcedAlignment::drawSegResult(const AnnotatedLine &x, const StartTimeSeque
 		boost::filesystem::create_directory(p.parent_path());
 	}
 	imwrite(resultPath, img);
+}
+
+void ForcedAlignment::writeResultInFischerFormat(std::ofstream& resultFischerFile, const AnnotatedLine &x, StartTimeSequence &y_hat)
+{
+	resultFischerFile << x.m_lineId << " ";
+	bool startWord = true;
+	for (size_t i = 1; i < y_hat.size(); ++i)
+	{
+		if (x.m_charSeq[i] == '|' || startWord)
+		{
+			char delim = startWord ? '-' : '|';
+			resultFischerFile << y_hat[i] << delim;
+			startWord = x.m_charSeq[i] == '|';
+		}
+	}
+	resultFischerFile << endl;
+}
+
+void ForcedAlignment::printConfidencePerChar(AnnotatedLine &x, const StartTimeSequence &y)
+{
+	for (size_t i = 1; i < y.size(); ++i)
+	{
+		uchar asciiCode = x.m_charSeq[i];
+		if (asciiCode != '|')
+		{
+			const auto& scores = x.m_scores[asciiCode];
+			if (asciiCode != '|')
+			{
+				cout << x.m_charSeq[i] << ": " << scores.m_scoreVals.at<double>(0, y[i]) << endl;
+			}
+		}
+	}
 }

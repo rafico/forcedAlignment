@@ -252,7 +252,6 @@ void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<do
 
 	int bH, bW;
 	Mat featDoc;
-	//Doc &nonconst_doc = ;
 	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW, sbin);
 
 	CV_Assert(featDoc.isContinuous());
@@ -313,4 +312,24 @@ vector<int> HogUtils::nms(Mat I, const vector<Rect>& X, double overlap)
 	}
 	pick.resize(Npick);
 	return pick;
+}
+void HogUtils::getFeaturesStartingFromColumn(const Doc& doc, uint& col, uint sbin, Mat& features)
+{
+	int bH, bW;
+	Mat featDoc;
+	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW, sbin);
+	col -= col%sbin;
+
+	uint start_col = col / sbin;
+	int numCols = bW - start_col;
+	features.create(numCols*bH, 31, CV_32F);
+	
+	for (auto by = 0; by < bH; ++by)
+	{
+		auto a = by*bW + start_col;
+		auto b = (by + 1)*bW;
+		auto c = by*numCols;
+		auto d = (by + 1)*numCols;
+		featDoc.rowRange(Range(a, b)).copyTo(features.rowRange(Range(c, d)));
+	}
 }

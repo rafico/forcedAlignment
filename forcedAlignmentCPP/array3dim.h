@@ -2,6 +2,9 @@
 /** Implements a simple 3dim array for real values
 @author Shai Shalev
 */
+
+#include <vector>
+
 template <class T>
 class threeDimArray {
 
@@ -18,8 +21,10 @@ public:
 		_M = M;
 		_NNNN = N;
 		_K = K;
-		_data = new T[M*N*K];
+		_data.reserve(M*N*K);
 	};
+
+	threeDimArray() = default;
 
 	//*****************************************************************************
 	// reference operators
@@ -32,24 +37,16 @@ public:
 	@returns A reference to the requested array entry
 	*/
 	inline T& operator() (uint m, uint n, uint k) {
-		return *(_data + m + (n + k*_NNNN)*_M);
+		return _data[m + (n + k*_NNNN)*_M];
 	};
 
 	void init(T val)
 	{
-		for (size_t i = 0; i < _M*_NNNN*_K; ++i)
-		{
-			_data[i] = val;
-		}
+		_data.assign(_M*_NNNN*_K, val);
 	}
 
-	// destructor
-	inline ~threeDimArray() {
-		delete[] _data;
-	};
-
 protected:
-	T* _data;  // pointer to the data
+	std::vector<T> _data;  // pointer to the data
 	// dimensions
 	uint _M;
 	uint _NNNN;

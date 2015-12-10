@@ -6,6 +6,7 @@ Programmers: Joseph Keshet & Rafi Cohen
 
 **************************** INCLUDE FILES *****************************/
 #include <iostream>
+#include <iterator>
 #include "Classifier.h"
 #include "array3dim.h"
 
@@ -26,11 +27,12 @@ Inputs:       none.
 Output:       none.
 Comments:     none.
 ***********************************************************************/
-Classifier::Classifier(double _min_sqrt_gamma, std::string _loss_type) 
+Classifier::Classifier(double _min_sqrt_gamma, std::string _loss_type, bool accTrans /* = false */)
 	: m_w(Mat::zeros(m_phi_size,1, CV_64F)),
 	m_w_old(Mat::zeros(m_phi_size, 1, CV_64F)),
 	m_min_sqrt_gamma(_min_sqrt_gamma),
-	m_trData(TrainingData::getInstance())
+	m_trData(TrainingData::getInstance()),
+	m_accTrans(accTrans)
 {
 	if (_loss_type != "tau_insensitive_loss" && _loss_type != "alignment_loss") {
 		std::cout << "Error: undefined loss type" << std::endl;
@@ -160,10 +162,28 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 	//Mat debugIm = x.m_image.colRange(startCell, std::min(endCell + 1, x.m_image.cols));
 
 	double lengthLikelihood = 0;
-	const auto& scores = x.m_scores[asciiCode];
+
 	if (asciiCode != '|')
 	{
-		v.at<double>(0) = scores.m_scoreVals.at<double>(0, startCell);
+		auto scoresIter = x.m_scores.find(asciiCode);
+		if (x.m_scores.end() == scoresIter)
+		{
+			std::cerr << "No scores computed for " << asciiCode << endl;
+		}
+
+		auto upperChar = (uchar)std::toupper(asciiCode);
+
+		if (m_accTrans || (x.m_scores.end() == x.m_scores.find(upperChar)))
+		{
+			v.at<double>(0) = x.m_scores[asciiCode].m_scoreVals.at<double>(0, startCell);
+		}
+		else
+		{
+			const Mat &lhs = x.m_scores[asciiCode].m_scoreVals;
+			const Mat &rhs = x.m_scores[upperChar].m_scoreVals;
+			v.at<double>(0) = std::max(lhs.at<double>(0, startCell), rhs.at<double>(0, startCell));
+		}
+
 		v.at<double>(1) = x.m_fixedScores.at<double>(0, startCell);
 		v.at<double>(2) = x.m_fixedScores.at<double>(1, startCell);
 
@@ -223,6 +243,36 @@ double Classifier::phi_2(AnnotatedLine& x,
 	return (v / double(x.m_charSeq.size()));
 }
 
+
+double backtrack(threeDimArray<double> D0, threeDimArray<int> prev_l, threeDimArray<int> prev_t, StartTimeSequence &y_hat, int T, int maxNumCols, int C)
+{
+	// Termination
+	std::vector<int> pred_l(C);
+	std::vector<int> pred_t(C);
+	double D2_max = MISPAR_KATAN_MEOD;
+
+	for (int l = 1; l <= _min(T, maxNumCols); ++l)
+	{
+		if (D0(C - 1, T - 1, l) > D2_max)
+		{
+			D2_max = D0(C - 1, T - 1, l);
+			pred_l[C - 1] = l;
+			pred_t[C - 1] = T - 1;
+		}
+	}
+	y_hat[C - 1] = T - 1 - pred_l[C - 1] + 1;
+
+	// Back-tracking
+	for (short p = C - 2; p >= 0; p--) {
+		pred_l[p] = prev_l(p + 1, pred_t[p + 1], pred_l[p + 1]);
+		pred_t[p] = prev_t(p + 1, pred_t[p + 1], pred_l[p + 1]);
+		y_hat[p] = pred_t[p] - pred_l[p] + 1;
+	}
+	y_hat[0] = 0;
+
+	return (D2_max / double(T));
+}
+
 /************************************************************************
 Function:     Classifier::predict
 
@@ -233,16 +283,17 @@ Output:       void
 Comments:     none.
 ***********************************************************************/
 
-double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
+double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat, bool useCache  /* = false */)
 {
 	// predict label - the argmax operator
 
 	int minNumCols, maxNumCols;
 	m_trData.getExtermalWidths(x.m_charSeq, maxNumCols, minNumCols);
-		
+	maxNumCols = std::max(410, 5 * maxNumCols);
+
 	int C = x.m_charSeq.size();
-	int T = x.m_W;
-	int L = std::max(410, 5 * maxNumCols)+1;
+	int T = std::min((int)x.m_W, x.getRightmostBinCol() + 30);
+	int L = maxNumCols + 1;
 	threeDimArray<int> prev_l(C, T, L); // the value of l2 for back-tracking
 	threeDimArray<int> prev_t(C, T, L); // the value of t2 for back-tracking
 	threeDimArray<double> D0(C, T, L); // char i finished at time t and started at t-l+1
@@ -264,7 +315,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 	Mem.init(MISPAR_KATAN_MEOD);
 
 	// Here calculate the calculation for the culculata
-	for (int t = 1; t < _min(T, 5 * maxNumCols); ++t)
+	for (int t = 1; t < _min(T, maxNumCols); ++t)
 	{
 		D1 = m_w.rowRange(0, m_phi_size - 1).dot(phi_1(x, 0, t, t+1));
 		D0(0, t, t+1) = D1;
@@ -318,12 +369,14 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 		}
 	}
 	cout << endl;
+
 	// Termination
 	std::vector<int> pred_l(C);
 	std::vector<int> pred_t(C);
+	//double 
 	D2_max = MISPAR_KATAN_MEOD;
 
-	for (int l = 1; l <= _min(T, 5 * maxNumCols); ++l)
+	for (int l = 1; l <= _min(T, maxNumCols); ++l)
 	{
 		if (D0(C - 1, T - 1, l) > D2_max) 
 		{
@@ -344,6 +397,7 @@ double Classifier::predict(AnnotatedLine& x, StartTimeSequence &y_hat)
 
 	return (D2_max / double(T));
 }
+
 
 /************************************************************************
 Function:     Classifier::aligned_phoneme_scores

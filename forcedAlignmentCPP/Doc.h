@@ -54,7 +54,7 @@ struct Doc
 {
 	Doc();
 	Doc(string pathImage);
-	void Init(string pathImage);
+	void Init(string pathImage, string binPath = "");
 
 	void loadXml(const string& pathXml);
 	void sortElements();
@@ -62,10 +62,12 @@ struct Doc
 	void resizeDoc(uint sbin);
 	void computeFeatures(uint sbin);
 	void getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin);
+	int getRightmostBinCol();
 
 	string m_pathImage;
 	Mat m_origImage;
 	Mat m_image;
+	Mat m_bin;
 	Mat m_features;	
 	uint m_H;	
 	uint m_W;

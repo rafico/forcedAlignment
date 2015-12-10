@@ -8,6 +8,7 @@
 #include "ForcedAlignment.h"
 #include "Doc.h"
 #include "CharSpotting.h"
+#include "TranscriptLexicon.h"
 
 using namespace std;
 using namespace cv;
@@ -15,7 +16,11 @@ using namespace cv;
 int main(int argc, char** argv)
 {
 	ForcedAlignment fa;
-	fa.decode();
+	fa.inAccDecode();
+
+	//TranscriptLexicon tl;
+	//tl.buildLexicon();
+	//tl.writeLexiconToFile();
 
 	//CharSpotting sp;
 	//sp.evaluateModels();

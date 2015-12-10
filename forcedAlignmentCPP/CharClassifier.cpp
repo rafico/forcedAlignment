@@ -210,6 +210,8 @@ HogSvmModel CharClassifier::learnModel(uchar asciiCode)
 
 	int numSamples = (m_params.m_numTrWords + m_numNWords)*chVec.size();
 	clog << "num of training samples for " << asciiCode << ": " << numSamples << endl;
+	if (numSamples != 0)
+	{
 	Mat trHOGs = Mat::zeros(numSamples, descsz, CV_32F);
 	
 	size_t position = 0;
@@ -235,7 +237,9 @@ HogSvmModel CharClassifier::learnModel(uchar asciiCode)
 	string svmlib = (chVec.size() == 1) ? "bl" : m_params.m_svmlib;
 	trainClassifier(trHOGs, hs_model, numSamples, m_params.m_numTrWords*chVec.size(), svmlib);
 
+		hs_model.setInitialized();
 	hs_model.save2File();
+	}
 	return hs_model;
 }
 

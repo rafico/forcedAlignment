@@ -40,13 +40,13 @@ void TrainingData::loadDocs(vector<Doc> &docCont, unordered_map<string, size_t> 
 	for (directory_iterator itr(dir_path); itr != end_itr; ++itr)
 	{
 		if (itr->path().extension() == ".xml")
-	{
+		{
 			string fileName = itr->path().filename().stem().string();
-		cout << "Loading " << fileName << endl;
+			cout << "Loading " << fileName << endl;
 			string imgFileName = m_params.m_pathImages + fileName + ".jpg";
-		Doc doc(imgFileName);
+			Doc doc(imgFileName);
 			doc.loadXml(m_params.m_pathCharLocation + fileName + ".xml");
-		docCont.push_back(Doc(doc));
+			docCont.push_back(Doc(doc));
 			file2DocMap.insert({ fileName, docCont.size() - 1 });
 		}
 	}
@@ -96,11 +96,11 @@ void TrainingData::getExtermalWidths(vector<uchar>& charSeq, int &maxWidth, int&
 	{
 		if (asciiCode != '|')
 		{
-		auto& tch = m_charInstances[asciiCode];
-		maxWidth = std::max(maxWidth, tch.m_maxWidth);
-		minWidth = std::min(minWidth, tch.m_minWidth);
+			auto& tch = m_charInstances[asciiCode];
+			maxWidth = std::max(maxWidth, tch.m_maxWidth);
+			minWidth = std::min(minWidth, tch.m_minWidth);
+		}
 	}
-}
 }
 
 void TrainingData::estimateNormalDistributionParams()
@@ -146,8 +146,8 @@ double TrainingData::getMinWidth(uchar asciiCode)
 {
 	if (asciiCode != '|')
 	{
-	return m_charInstances[asciiCode].m_minWidth;
-}
+		return m_charInstances[asciiCode].m_minWidth;
+	}
 	else
 	{
 		return 1;
@@ -158,8 +158,8 @@ double TrainingData::getMaxWidth(uchar asciiCode)
 {
 	if (asciiCode != '|')
 	{
-	return m_charInstances[asciiCode].m_maxWidth;
-}
+		return m_charInstances[asciiCode].m_maxWidth;
+	}
 	else
 	{
 		return 410;
@@ -172,10 +172,10 @@ double TrainingData::getMeanWidth(uchar asciiCode)
 }
 
 double TrainingData::getStdWidth(uchar asciiCode)
-	{
+{
 	return m_charInstances[asciiCode].m_widthStd;
 }
-		
+
 double TrainingData::getMeanHeight(uchar asciiCode)
 {
 	return m_charInstances[asciiCode].m_heightMean;
@@ -220,35 +220,45 @@ void TrainingData::writeQueriesAndDocsGTPfiles()
 // TODO: iterate over the docs/word/line and write to each char where it came from.
 void TrainingData::displayTrainingData()
 {
+
+	path charSamplesDir(m_params.m_pathData + "charSamples" + "_" + m_params.m_dataset + "/");
+	if (!exists(charSamplesDir))
+	{
+		if (boost::filesystem::create_directory(charSamplesDir))
+		{
+			std::clog << "Success in creating " << charSamplesDir.string() << "\n";
+		}
+	}
+
 	for (size_t docNum = 0; docNum < m_trainingDocs.size(); ++docNum)
 	{
 		const Doc &doc = m_trainingDocs[docNum];
 		string docName = path(doc.m_pathImage).stem().string();
 		const Mat &imDoc = doc.m_origImage;
 		for (size_t lineNum = 0; lineNum < doc.m_lines.size();  ++lineNum)
-	{
+		{
 			auto &line = doc.m_lines[lineNum];
 			for (size_t wordIdx = 0; wordIdx < line.m_wordIndices.size(); ++wordIdx)
-		{
+			{
 				const Word &word = doc.m_words[line.m_wordIndices[wordIdx]];
 				for (auto &chIdx : word.m_charIndices)
-		{
+				{
 					auto ci = doc.m_chars[chIdx];
 					uchar asciiCode = ci.m_asciiCode;
-			Rect loc = ci.m_loc;
-			auto x1 = loc.x;
-			auto x2 = loc.x + loc.width;
-			auto y1 = loc.y;
-			auto y2 = loc.y + loc.height;
-			Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
+					Rect loc = ci.m_loc;
+					auto x1 = loc.x;
+					auto x2 = loc.x + loc.width;
+					auto y1 = loc.y;
+					auto y2 = loc.y + loc.height;
+					Mat im = imDoc(Rect(x1, y1, x2 - x1, y2 - y1));
 
-					string pathString = m_params.m_pathData + char(asciiCode) + "_" + std::to_string(asciiCode) + "/";
+					string pathString = charSamplesDir.string() + char(asciiCode) + "_" + std::to_string(asciiCode) + "/";
 					path dir(pathString);
 					if (!exists(dir))
 					{
 						if (boost::filesystem::create_directory(dir))
 						{
-							std::cout << "Success in creating " << dir.string() << "\n";
+							std::clog << "Success in creating " << dir.string() << "\n";
 						}
 					}
 					imwrite(pathString + docName + "_" + to_string(lineNum) + "_" + to_string(wordIdx) + ".png", im);

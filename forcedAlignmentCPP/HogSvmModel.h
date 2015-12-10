@@ -5,11 +5,14 @@
 
 struct HogSvmModel
 {
-	HogSvmModel() {};
+	HogSvmModel();
 	HogSvmModel(uchar asciiCode, const string& pathCharModels = "");
 
 	void save2File();
 	bool loadFromFile();
+	void setInitialized() { m_initialized = true; }
+	bool isInitialized() { return m_initialized; }
+
 
 	uchar m_asciiCode;
 
@@ -19,6 +22,8 @@ struct HogSvmModel
 	int m_bW;
 	vector<float> weight;
 	double m_bias;
+
+	bool m_initialized;
 
 	string m_fileName;
 };

@@ -8,7 +8,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/ml.hpp>
 
-#define MISPAR_KATAN_MEOD (-1000000)
+#define MISPAR_KATAN_MEOD (-1000000.0)
 #define MAX_LINE_SIZE 4096
 
 using std::string;

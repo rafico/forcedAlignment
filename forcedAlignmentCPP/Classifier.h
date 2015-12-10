@@ -13,12 +13,12 @@ Purpose:  Alignment discriminative algorithm
 class Classifier
 {
 public:
-	Classifier(double _min_sqrt_gamma, std::string _loss_type);
+	Classifier(double _min_sqrt_gamma, std::string _loss_type, bool accTrans = true);
 	void load(const std::string &filename);
 	void save(const std::string &filename);
 	bool was_changed() { return m_w_changed; }
 	double update(AnnotatedLine& x, StartTimeSequence &y, StartTimeSequence &y_hat);
-	double predict(AnnotatedLine& x, StartTimeSequence &y_hat);
+	double predict(AnnotatedLine& x, StartTimeSequence &y_hat, bool useCache = false);
 	Mat phi(AnnotatedLine& x, StartTimeSequence& y);
 	Mat phi_1(AnnotatedLine& x, int i, int t, int l);
 	double phi_2(AnnotatedLine& x, int i, int t, int l1, int l2);
@@ -31,11 +31,13 @@ public:
 	static std::string m_loss_type;
 
 protected:
+
 	static int m_phi_size;
 	Mat m_w;
 	Mat m_w_old;
 	bool m_w_changed;
 	double m_min_sqrt_gamma;
+	bool m_accTrans;
 
 	TrainingData &m_trData;
 };

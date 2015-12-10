@@ -1,5 +1,5 @@
-#ifndef _H_LM_PARAMS_H__
-#define _H_LM_PARAMS_H__
+#ifndef _H_PARAMS_H__
+#define _H_PARAMS_H__
 
 #include "commonTypes.h"
 #include "Singleton.h"
@@ -30,7 +30,7 @@ private:
 #if _WIN32 || _WIN64
 		m_datasetPath("D:/datasets/" + m_dataset + "/"),
 #elif __GNUC__
-		m_datasetPath("/home/auser/ews/datasets/" + m_dataset + "/"),
+		m_datasetPath("/home/auser/datasets/" + m_dataset + "/"),
 #endif
 		m_pathImages(m_datasetPath + "images/"),
 		m_pathGT(m_datasetPath + "ground_truth/"),
@@ -43,7 +43,8 @@ private:
 		m_pathTranscription(m_pathGT + "transcription.txt"),
 		m_pathStartTime(m_pathGT + "charStartTime.txt"),
 		m_pathLineImages(m_datasetPath + m_pathData + "line_images/"),
-		m_pathLineBinImages(m_datasetPath + m_pathData + "line_images_binarized/")
+		m_pathLineBinImages(m_datasetPath + m_pathData + "line_images_binarized/"),
+		m_pathSets(m_datasetPath + "sets/")
 	{
 		initDirs();
 	}
@@ -82,5 +83,6 @@ public:
 	string m_pathStartTime;
 	string m_pathLineImages;
 	string m_pathLineBinImages;
+	string m_pathSets;
 };
-#endif // !_H_LM_PARAMS_H__
+#endif // !_H_PARAMS_H__

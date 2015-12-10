@@ -2,8 +2,13 @@
 #include "HogSvmModel.h"
 #include <string>
 
+HogSvmModel::HogSvmModel()
+	: m_initialized(false)
+{}
+
 HogSvmModel::HogSvmModel(uchar asciiCode, const string& pathCharModels /* = "" */)
 	: m_asciiCode(asciiCode),
+	m_initialized(false),
 	m_fileName(pathCharModels + char(asciiCode) + "_" + std::to_string(asciiCode)+".yml")
 {}
 
@@ -34,6 +39,8 @@ bool HogSvmModel::loadFromFile()
 	m_newW = helper[1];
 	m_bH = helper[2];
 	m_bW = helper[3];
+
+	m_initialized = true;
 
 	return true;
 }
