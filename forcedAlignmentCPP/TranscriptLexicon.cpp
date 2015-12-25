@@ -226,7 +226,7 @@ vector<CharSequence> TranscriptLexicon::getPossibleLineVariations(const CharSequ
 			std::cout << word << ": ";
 			for (auto &s : Synonymous)
 			{
-				std::cout << " " << s;
+				std::cout << s << ", ";
 			}
 		}
 	}
