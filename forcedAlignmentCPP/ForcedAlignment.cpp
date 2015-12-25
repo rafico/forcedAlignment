@@ -281,6 +281,7 @@ void ForcedAlignment::inAccDecode(const TranscriptLexicon& tl)
 		vector<CharSequence> variations = tl.getPossibleLineVariations(x.m_charSeq);
 		size_t maxIdx = 0;
 		double maxConfidence=0;
+		StartTimeSequence y_max;
 		for (size_t cs_idx = 0; cs_idx < variations.size(); ++cs_idx)
 		{
 			auto &cs = variations[cs_idx];
@@ -293,11 +294,13 @@ void ForcedAlignment::inAccDecode(const TranscriptLexicon& tl)
 			{
 				maxConfidence = confidence;
 				maxIdx = cs_idx;
+				y_max = y_hat;
 			}
 		}
 
 		cout << "max confidence: " << maxIdx << endl;
 		x.m_charSeq = variations[maxIdx];
+		y_hat = y_max;
 
 		if (test_dataset.labels_given())
 		{
