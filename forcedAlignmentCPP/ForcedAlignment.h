@@ -2,6 +2,7 @@
 #define _H_FORCED_ALIGNMENT_TRAIN_H__
 
 #include "Dataset.h"
+#include "TranscriptLexicon.h"
 
 class ForcedAlignment
 {
@@ -12,7 +13,7 @@ public:
 	void decode();
 
 	void inAccTrain();
-	void inAccDecode();
+	void inAccDecode(const TranscriptLexicon& tl);
 
 private:
 	void drawSegResult(const AnnotatedLine &x, const StartTimeSequence &y, const StartTimeSequence &y_hat);

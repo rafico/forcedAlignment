@@ -12,6 +12,7 @@ Purpose:  Defines the data structs of instance and label
 #include <vector>
 #include <unordered_map>
 #include "CharClassifier.h"
+#include "CharSequence.h"
 
 class IntVector : public std::vector<int> {
 public:
@@ -40,21 +41,6 @@ public:
 };
 
 std::ostream& operator<< (std::ostream& os, const IntVector& v);
-
-/***********************************************************************/
-
-
-class CharSequence : public vector<uchar>
-{
-public:
-	void from_acc_trans(const string &char_string);
-	void from_in_acc_trans(const string &char_string);
-
-public:
-	static unsigned int m_num_chars;
-};
-
-std::ostream& operator<< (std::ostream& os, const CharSequence& y);
 
 /***********************************************************************/
 

@@ -313,6 +313,7 @@ vector<int> HogUtils::nms(Mat I, const vector<Rect>& X, double overlap)
 	pick.resize(Npick);
 	return pick;
 }
+
 void HogUtils::getFeaturesStartingFromColumn(const Doc& doc, uint& col, uint sbin, Mat& features)
 {
 	int bH, bW;

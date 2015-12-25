@@ -1,4 +1,5 @@
 #include <sstream>
+#include "commonTypes.h"
 #include "TranscriptLexicon.h"
 #include "Dataset.h"
 
@@ -13,6 +14,8 @@ TranscriptLexicon::TranscriptLexicon()
 
 void TranscriptLexicon::buildLexicon()
 {
+	std::map<string, std::set<string>> m_lexiconTemp;
+
 	for (auto fileName : m_training_file_list)
 	{
 		auto p = std::lower_bound(begin(m_transcription_file), end(m_transcription_file), fileName);
@@ -55,11 +58,11 @@ void TranscriptLexicon::buildLexicon()
 				// transforming inAccWord to lower case.
 				std::transform(accWord.begin(), accWord.end(), accWord.begin(), ::tolower);
 
-				auto iter = m_lexicon.find(inAccWord);
-				if (iter == end(m_lexicon))
+				auto iter = m_lexiconTemp.find(inAccWord);
+				if (iter == end(m_lexiconTemp))
 				{
 					std::set<string> firstWord{ accWord };
-					m_lexicon.insert(make_pair(inAccWord, firstWord));
+					m_lexiconTemp.insert(make_pair(inAccWord, firstWord));
 				}
 				else
 				{
@@ -79,6 +82,12 @@ void TranscriptLexicon::buildLexicon()
 			ssTranscription >> lineId;
 			docName = lineId.substr(0, lineId.find_last_of("-"));
 		}
+	}
+	
+	for (auto &iter : m_lexiconTemp)
+	{
+		vector<string> tempVec(iter.second.begin(), iter.second.end());
+		m_lexicon.insert({ iter.first, tempVec });
 	}
 }
 
@@ -164,3 +173,95 @@ void TranscriptLexicon::writeLexiconToFile()
 	lexiconFile.close();
 }
 
+std::vector<string> TranscriptLexicon::getSynonymous(const string &word) const
+{
+	auto iter = m_lexicon.find(word);
+	if (iter == m_lexicon.end())
+	{
+		return { word };
+	}
+	else
+	{
+		return iter->second;
+	}
+}
+
+std::ostream& operator<< (std::ostream& os, const vector<int>& y)
+{
+	for (uint i = 0; i < y.size(); i++)
+		os << y[i] << " ";
+
+	return os;
+}
+
+vector<CharSequence> TranscriptLexicon::getPossibleLineVariations(const CharSequence& char_seq) const
+{
+	string word;
+	vector<string> words;
+	for (size_t i = 1; i < char_seq.size(); ++i)
+	{
+		if (char_seq[i] != '|')
+		{
+			word.push_back(char_seq[i]);
+		}
+		else
+		{
+			words.push_back(word);
+			word.clear();
+		}
+	}
+
+	int possibilities = 1;
+	vector<int> PossibilitiesVec(words.size(), 0);
+
+	for (size_t idx = 0; idx < words.size(); ++idx)
+	{
+		auto &word = words[idx];
+		auto Synonymous = getSynonymous(word);
+		size_t sz = Synonymous.size();
+		PossibilitiesVec[idx] = sz;
+		possibilities *= sz;
+		if (sz != 1)
+		{
+			std::cout << word << ": ";
+			for (auto &s : Synonymous)
+			{
+				std::cout << " " << s;
+			}
+		}
+	}
+
+	std::cout << "\nNumer of variations is :" << possibilities << endl;
+	vector<CharSequence> result;
+
+	vector<int> enumerationVec(words.size(), 1);
+	for (int enumeration = 0; enumeration < possibilities; ++enumeration)
+	{
+		CharSequence charSeq;
+		charSeq.push_back('|');
+
+		bool carry = true;
+		for (size_t idx = 0; idx < words.size(); ++idx)
+		{
+			auto &word = words[idx];
+			auto Synonymous = getSynonymous(word);
+			string syn = Synonymous[enumerationVec[idx]-1];
+			charSeq.insert(end(charSeq), begin(syn), end(syn));
+			charSeq.push_back('|');
+
+			if (carry && (enumerationVec[idx] == PossibilitiesVec[idx]))
+			{
+				enumerationVec[idx] = 1;
+			}
+			else if (carry)
+			{
+				enumerationVec[idx]++;
+				carry = false;
+			}
+			}
+		result.push_back(charSeq);
+		}
+
+
+	return result;
+}

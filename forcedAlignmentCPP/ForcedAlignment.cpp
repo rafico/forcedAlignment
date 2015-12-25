@@ -19,7 +19,7 @@ ForcedAlignment::ForcedAlignment()
 
 void ForcedAlignment::train()
 {
-	double epsilon = 0;
+	//double epsilon = 0;
 
 	string loss_type = "alignment_loss";
 	string training_file_list = "train.txt";
@@ -234,7 +234,7 @@ void ForcedAlignment::decode()
 	cout << "Done." << endl;
 }
 
-void ForcedAlignment::inAccDecode()
+void ForcedAlignment::inAccDecode(const TranscriptLexicon& tl)
 {
 	const Params &params = Params::getInstance();
 
@@ -276,10 +276,29 @@ void ForcedAlignment::inAccDecode()
 
 		// read next example for dataset
 		test_dataset.read(x, lineEnd, lineEndBin, y, i);
-		y_hat.resize(x.m_charSeq.size());
-
+		
+		double confidence;
+		vector<CharSequence> variations = tl.getPossibleLineVariations(x.m_charSeq);
+		size_t maxIdx = 0;
+		double maxConfidence=0;
+		for (size_t cs_idx = 0; cs_idx < variations.size(); ++cs_idx)
+		{
+			auto &cs = variations[cs_idx];
+			x.m_charSeq = cs;
 		// predict label 
-		double confidence = classifier.predict(x, y_hat);
+		y_hat.resize(x.m_charSeq.size());
+			confidence = classifier.predict(x, y_hat);
+			cout << "confidence: " << confidence << endl;
+			if (confidence > maxConfidence)
+			{
+				maxConfidence = confidence;
+				maxIdx = cs_idx;
+			}
+		}
+
+		cout << "max confidence: " << maxIdx << endl;
+		x.m_charSeq = variations[maxIdx];
+
 		if (test_dataset.labels_given())
 		{
 			cout << "alignment= " << y << endl;
@@ -307,6 +326,7 @@ void ForcedAlignment::inAccDecode()
 			
 			// recomputing the alignment for the current line.
 			test_dataset.read(x, y, i);
+			x.m_charSeq = variations[maxIdx];
 			x.m_charSeq.erase(x.m_charSeq.begin() + 1, x.m_charSeq.begin() + last_loc_from_prev_line + 1);
 			y_hat.resize(x.m_charSeq.size());
 			confidence = classifier.predict(x, y_hat);
@@ -314,7 +334,7 @@ void ForcedAlignment::inAccDecode()
 		}
 
 		auto lastCol = x.getRightmostBinCol();
-		uint lineEndCol = std::min(lastCol + 2, x.m_image.cols);
+		int lineEndCol = std::min(lastCol + 2, x.m_image.cols);
 
 		if (lineEndCol > y_hat.back())
 		{

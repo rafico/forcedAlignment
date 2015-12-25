@@ -15,12 +15,14 @@ using namespace cv;
 
 int main(int argc, char** argv)
 {
-	ForcedAlignment fa;
-	fa.inAccDecode();
+	TranscriptLexicon tl;
+	tl.buildLexicon();
+	tl.writeLexiconToFile();
 
-	//TranscriptLexicon tl;
-	//tl.buildLexicon();
-	//tl.writeLexiconToFile();
+	ForcedAlignment fa;
+	fa.inAccDecode(tl);
+
+
 
 	//CharSpotting sp;
 	//sp.evaluateModels();

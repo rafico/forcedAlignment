@@ -31,8 +31,8 @@ Classifier::Classifier(double _min_sqrt_gamma, std::string _loss_type, bool accT
 	: m_w(Mat::zeros(m_phi_size,1, CV_64F)),
 	m_w_old(Mat::zeros(m_phi_size, 1, CV_64F)),
 	m_min_sqrt_gamma(_min_sqrt_gamma),
-	m_trData(TrainingData::getInstance()),
-	m_accTrans(accTrans)
+	m_accTrans(accTrans),
+	m_trData(TrainingData::getInstance())
 {
 	if (_loss_type != "tau_insensitive_loss" && _loss_type != "alignment_loss") {
 		std::cout << "Error: undefined loss type" << std::endl;
