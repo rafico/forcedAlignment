@@ -231,7 +231,7 @@ vector<CharSequence> TranscriptLexicon::getPossibleLineVariations(const CharSequ
 		}
 	}
 
-	std::cout << "\nNumer of variations is :" << possibilities << endl;
+	std::cout << "\nNumber of variations is :" << possibilities << endl;
 	vector<CharSequence> result;
 
 	vector<int> enumerationVec(words.size(), 1);

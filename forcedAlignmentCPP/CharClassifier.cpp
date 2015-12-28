@@ -35,7 +35,7 @@ void CharClassifier::computeFeaturesDocs()
 	for (size_t i = 0; i < m_docs.size(); ++i)
 	{
 		clog << "Computing features and labels of doc: " << i << endl;
-		m_docs[i].computeFeatures(m_params.m_sbin);
+		m_docs[i].computeFeatures();
 	}
 }
 
@@ -84,13 +84,12 @@ void CharClassifier::sampleNeg(Mat &trHOGs, size_t position, int wordsByDoc, con
 
 	uint dim = m_params.m_dim;
 	size_t stepSize = hs_model.m_bW*dim;
-	uint sbin = m_params.m_sbin;
 
 	for (uint id = 0; id < m_docs.size(); ++id)
 	{
 		Mat fD;
 		int BH, BW;
-		m_docs[id].getComputedFeatures(fD, BH, BW, sbin);
+		m_docs[id].getComputedFeatures(fD, BH, BW);
 
 		float *flat = fD.ptr<float>(0);
 

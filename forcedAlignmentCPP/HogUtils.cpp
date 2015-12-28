@@ -252,7 +252,7 @@ void HogUtils::getWindows(const Doc& doc, const HogSvmModel& hs_model, vector<do
 
 	int bH, bW;
 	Mat featDoc;
-	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW, sbin);
+	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW);
 
 	CV_Assert(featDoc.isContinuous());
 	float *flat = featDoc.ptr<float>(0);
@@ -318,7 +318,7 @@ void HogUtils::getFeaturesStartingFromColumn(const Doc& doc, uint& col, uint sbi
 {
 	int bH, bW;
 	Mat featDoc;
-	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW, sbin);
+	const_cast<Doc &>(doc).getComputedFeatures(featDoc, bH, bW);
 	col -= col%sbin;
 
 	uint start_col = col / sbin;

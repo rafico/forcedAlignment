@@ -3,6 +3,7 @@
 
 #include "commonTypes.h"
 #include <boost/property_tree/ptree.hpp>
+#include "Params.h"
 
 namespace pt = boost::property_tree;
 
@@ -59,9 +60,9 @@ struct Doc
 	void loadXml(const string& pathXml);
 	void sortElements();
 
-	void resizeDoc(uint sbin);
-	void computeFeatures(uint sbin);
-	void getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin);
+	void resizeDoc();
+	void computeFeatures();
+	void getComputedFeatures(Mat &features, int &BH, int&BW);
 	int getRightmostBinCol();
 
 	string m_pathImage;
@@ -77,6 +78,8 @@ struct Doc
 	int m_bW;
 
 	bool m_featuresComputed;
+
+	Params *m_params;
 
 	vector<Character> m_chars;
 	vector<Word> m_words;

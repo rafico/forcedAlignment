@@ -267,7 +267,7 @@ void Dataset::computeScores(AnnotatedLine &x, const CharSequence *charSeq /*= nu
 	// Is it the first time we compute scores ?
 	if (nullptr == charSeq)
 	{
-	x.computeFeatures(sbin);
+		x.computeFeatures();
 		x.computeFixedScores();
 	}
 

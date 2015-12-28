@@ -82,17 +82,19 @@ Rect Character::resizeChar(const Rect &old_loc, uint sbin)
 }
 
 Doc::Doc()
-	: m_featuresComputed(false)
+	: m_featuresComputed(false),
+	m_params(&Params::getInstance())
 {}
 
 Doc::Doc(string pathImage)
+	: m_featuresComputed(false),
+	m_params(&Params::getInstance())
 {
 	Init(pathImage);
 }
 
 void Doc::Init(string pathImage, string binPath /* =  "" */)
 {
-	m_featuresComputed = false;
 	m_origImage = imread(pathImage);
 	m_pathImage = pathImage;
 	if (!m_origImage.data)
@@ -110,8 +112,9 @@ void Doc::Init(string pathImage, string binPath /* =  "" */)
 	}
 }
 
-void Doc::resizeDoc(uint sbin)
+void Doc::resizeDoc()
 {
+	uint sbin = m_params->m_sbin;
 	uint H = m_H;
 	uint W = m_W;
 	uint res;
@@ -144,19 +147,20 @@ void Doc::resizeDoc(uint sbin)
 	}
 }
 
-void Doc::computeFeatures(uint sbin)
+void Doc::computeFeatures()
 {
-	resizeDoc(sbin);
+	uint sbin = m_params->m_sbin;
+	resizeDoc();
 	Mat feat = HogUtils::process(m_image, sbin, &m_bH, &m_bW);
 	feat.convertTo(m_features, CV_32F);
 	m_featuresComputed = true;
 }
 
-void Doc::getComputedFeatures(Mat &features, int &BH, int&BW, uint sbin)
+void Doc::getComputedFeatures(Mat &features, int &BH, int&BW)
 {
 	if (!m_featuresComputed)
 	{
-		computeFeatures(sbin);
+		computeFeatures();
 	}
 	features = m_features;
 	BH = m_bH;
