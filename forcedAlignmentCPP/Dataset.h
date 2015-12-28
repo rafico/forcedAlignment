@@ -13,6 +13,7 @@ Purpose:  Defines the data structs of instance and label
 #include <unordered_map>
 #include "CharClassifier.h"
 #include "CharSequence.h"
+#include "AnnotatedLine.h"
 
 class IntVector : public std::vector<int> {
 public:
@@ -51,32 +52,6 @@ std::ostream& operator<< (std::ostream& os, const StartTimeSequence& y);
 
 /***********************************************************************/
 
-struct AnnotatedLine : Doc
-{
-	AnnotatedLine() : Doc()
-	{}
-	
-	AnnotatedLine(string pathLine)
-		: Doc(pathLine)
-	{}
-
-	struct scoresType
-	{
-		HogSvmModel m_hs_model;
-		Mat m_scoreVals;
-	};
-
-	void InitCombinedImg(string pathImage, string binPath, Mat lineEnd, Mat lineEndBin);
-
-	unordered_map<uchar, scoresType> m_scores;
-	Mat m_fixedScores;
-
-	CharSequence m_charSeq;
-	string m_lineId;
-};
-
-/***********************************************************************/
-
 class Dataset
 {
 public:
@@ -97,8 +72,6 @@ private:
 	};
 
 	void parseFiles();
-	
-	void computeFixedScores(AnnotatedLine &x);
 	void loadStartTimes(Example &example, const string docName, int lineNum, const StartTimeSequence& startTimeAndEndTime);
 
 	StringVector m_file_list;

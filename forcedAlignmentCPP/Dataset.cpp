@@ -21,6 +21,7 @@ PhonemeSequence --> CharSequence
 #include <boost/filesystem.hpp>
 #include "Dataset.h"
 #include "HogUtils.h"
+#include "AnnotatedLine.h"
 
 using namespace boost::filesystem;
 
@@ -259,33 +260,6 @@ void Dataset::loadStartTimes(Example &example, string docName, int lineNum, cons
 	}
 }
 
-void AnnotatedLine::InitCombinedImg(string pathImage, string binPath, Mat lineEnd, Mat lineEndBin)
-{
-	m_featuresComputed = false;
-	Mat origImg = cv::imread(pathImage);
-	
-	m_pathImage = pathImage;
-	if (!origImg.data)
-	{
-		std::cerr << "Could not open or find the image " << m_pathImage << std::endl;
-	}
-	
-	m_origImage = Mat::zeros(std::max(origImg.rows, lineEnd.rows), origImg.cols + lineEnd.cols, CV_8UC3);
-	lineEnd.copyTo(m_origImage(Range(0, lineEnd.rows), Range(0, lineEnd.cols)));
-	origImg.copyTo(m_origImage(Range(0, origImg.rows), Range(lineEnd.cols, m_origImage.cols)));
-
-	path p(m_pathImage);
-	string binImgPath = binPath + p.stem().string() + ".png";
-	Mat origBin = cv::imread(binImgPath, CV_LOAD_IMAGE_GRAYSCALE);
-
-	m_bin = Mat::zeros(std::max(origImg.rows, lineEndBin.rows), origImg.cols + lineEndBin.cols, CV_8UC1);
-	lineEndBin.copyTo(m_bin(Range(0, lineEndBin.rows), Range(0, lineEndBin.cols)));
-	origBin.copyTo(m_bin(Range(0, origBin.rows), Range(lineEndBin.cols, m_bin.cols)));
-
-	m_H = m_origImage.rows;
-	m_W = m_origImage.cols;
-}
-
 void Dataset::computeScores(AnnotatedLine &x, const CharSequence *charSeq /*= nullptr */)
 {
 	uint sbin = m_params.m_sbin;
@@ -294,7 +268,7 @@ void Dataset::computeScores(AnnotatedLine &x, const CharSequence *charSeq /*= nu
 	if (nullptr == charSeq)
 	{
 	x.computeFeatures(sbin);
-		computeFixedScores(x);
+		x.computeFixedScores();
 	}
 
 	const CharSequence &cq = (nullptr == charSeq) ? x.m_charSeq : (*charSeq);
@@ -346,87 +320,3 @@ void Dataset::computeScores(AnnotatedLine &x, const CharSequence *charSeq /*= nu
 	}
 }
 
-void Dataset::computeFixedScores(AnnotatedLine &x)
-{
-	// row 0 - projection profile (start char)
-	// row 1 - connected components (start char)
-	// row 2 - integral projection profile.
-	// row 3 - projection profile (end char)
-	// row 4 - connected components (end char)
-
-	x.m_fixedScores = Mat::zeros(5, x.m_W, CV_64F);
-
-			const int intervalSz = 5;
-
-			// computing Projection Profile scores.
-
-			Mat pp;
-	reduce(x.m_bin, pp, 0, CV_REDUCE_SUM, CV_64F);
-	Mat ppMat = x.m_fixedScores.rowRange(Range(0, 1));
-	Mat ppEndMat = x.m_fixedScores.rowRange(Range(3, 4));
-			for (int i = 0; i < pp.cols; ++i)
-			{
-				bool localMin = true;
-				double currentVal = pp.at<double>(i);
-				for (int offset = -intervalSz; (offset <= intervalSz) && localMin; ++offset)
-				{
-					double neighbourIdx = std::min(std::max(i+offset,0),pp.cols);
-					localMin &= currentVal <= pp.at<double>(neighbourIdx);
-		}
-				if (localMin && currentVal < pp.at<double>(std::min(i+1, pp.cols)))
-				{
-			ppMat.colRange(std::max(i - intervalSz + 2, 0), std::min(int(i + intervalSz + 1), pp.cols)) = 1;
-	}
-		if (localMin && currentVal < pp.at<double>(std::max(i - 1, 0)))
-		{
-			ppEndMat.colRange(std::max(i - intervalSz + 2, 0), std::min(int(i + intervalSz + 1), pp.cols)) = 1;
-		}
-}
-
-			// computing score using CC's
-	Mat ccMat = x.m_fixedScores.rowRange(Range(1, 2));
-	Mat ccEndMat = x.m_fixedScores.rowRange(Range(4, 5));
-			Mat labels;
-	connectedComponents(x.m_bin.t(), labels);
-			transpose(labels, labels);
-
-			set<int> current;
-			set<int> next;
-			set<int> diff;
-
-	for (auto rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
-{
-				current.insert(labels.at<int>(rowIdx, 0));
-			}
-
-	for (auto colIdx = 1; colIdx < labels.cols - 1; ++colIdx)
-	{
-		for (auto rowIdx = 0; rowIdx < labels.rows; ++rowIdx)
-		{
-					next.insert(labels.at<int>(rowIdx, colIdx));
-				}
-
-				set_difference(next.begin(), next.end(), current.begin(), current.end(), inserter(diff, diff.begin()));
-				if (!diff.empty())
-			{
-			ccMat.colRange(std::max(colIdx - intervalSz + 1, 0), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
-				}
-		diff.clear();
-
-		set_difference(current.begin(), current.end(), next.begin(), next.end(), inserter(diff, diff.begin()));
-		if (!diff.empty())
-		{
-			ccEndMat.colRange(std::max(colIdx - intervalSz + 1, 0), std::min(int(colIdx + intervalSz), labels.cols)) = 1;
-		}
-		diff.clear();
-
-				current = move(next);
-				next.clear(); 
-			}
-
-	// computing integral Projection Profile
-	Mat intPPMat;
-	integral(pp, intPPMat);
-	intPPMat /= 255;
-	intPPMat.rowRange(1, 2).colRange(1, pp.cols + 1).copyTo(x.m_fixedScores.rowRange(Range(2, 3)));
-}
