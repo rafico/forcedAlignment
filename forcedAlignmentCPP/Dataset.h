@@ -61,7 +61,6 @@ public:
 	void read(AnnotatedLine &x, Mat &lineEnd, Mat &lineEndBin, StartTimeSequence &y, int lineNum);
 	size_t size() { return m_lineIds.size(); }
 	bool labels_given() { return m_read_labels; }
-	void computeScores(AnnotatedLine &x, const CharSequence *charSeq=nullptr);
 
 private:
 

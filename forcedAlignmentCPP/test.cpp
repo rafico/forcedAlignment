@@ -22,8 +22,6 @@ int main(int argc, char** argv)
 	ForcedAlignment fa;
 	fa.inAccDecode(tl);
 
-
-
 	//CharSpotting sp;
 	//sp.evaluateModels();
 

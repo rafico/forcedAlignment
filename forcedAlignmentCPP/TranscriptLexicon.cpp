@@ -262,6 +262,5 @@ vector<CharSequence> TranscriptLexicon::getPossibleLineVariations(const CharSequ
 		result.push_back(charSeq);
 		}
 
-
 	return result;
 }

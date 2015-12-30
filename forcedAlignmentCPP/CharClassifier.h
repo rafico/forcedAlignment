@@ -11,8 +11,10 @@
 #include "HogSvmModel.h"
 #include "TrainingData.h"
 
-class CharClassifier
+class CharClassifier : public Singleton<CharClassifier>
 {
+	friend class Singleton<CharClassifier>;
+
 public:
 	CharClassifier();
 

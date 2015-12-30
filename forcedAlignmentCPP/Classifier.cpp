@@ -168,7 +168,9 @@ Mat Classifier::phi_1(AnnotatedLine& x,
 		auto scoresIter = x.m_scores.find(asciiCode);
 		if (x.m_scores.end() == scoresIter)
 		{
-			std::cerr << "No scores computed for " << asciiCode << endl;
+			CharSequence cs;
+			cs.push_back(asciiCode);
+			x.computeScores(&cs, m_accTrans);
 		}
 
 		auto upperChar = (uchar)std::toupper(asciiCode);

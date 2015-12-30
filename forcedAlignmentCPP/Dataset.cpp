@@ -97,7 +97,7 @@ void Dataset::read(AnnotatedLine &x, StartTimeSequence &y, int lineNum)
 	x.Init(x.m_pathImage, m_params.m_pathLineBinImages);
 	y = iter->second.m_time_seq;
 
-	computeScores(x);
+	x.computeScores();
 
 	int x_shift = x.m_xIni;
 	transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });	
@@ -123,7 +123,7 @@ void Dataset::read(AnnotatedLine &x, Mat &lineEnd, Mat &lineEndBin, StartTimeSeq
 	if (lineEnd.empty())
 	{
 		x.Init(x.m_pathImage, m_params.m_pathLineBinImages);
-		computeScores(x);
+		x.computeScores();
 
 		int x_shift = x.m_xIni;
 		transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });
@@ -131,7 +131,7 @@ void Dataset::read(AnnotatedLine &x, Mat &lineEnd, Mat &lineEndBin, StartTimeSeq
 	else
 	{
 		x.InitCombinedImg(x.m_pathImage, m_params.m_pathLineBinImages, lineEnd, lineEndBin);
-		computeScores(x);
+		x.computeScores();
 
 		int x_shift = x.m_xIni-lineEnd.cols;
 		transform(y.begin(), y.end(), y.begin(), [x_shift](int startTime){return std::max(startTime - x_shift, 0); });
@@ -259,64 +259,3 @@ void Dataset::loadStartTimes(Example &example, string docName, int lineNum, cons
 			example.m_time_seq.push_back(endTime);
 	}
 }
-
-void Dataset::computeScores(AnnotatedLine &x, const CharSequence *charSeq /*= nullptr */)
-{
-	uint sbin = m_params.m_sbin;
-
-	// Is it the first time we compute scores ?
-	if (nullptr == charSeq)
-	{
-		x.computeFeatures();
-		x.computeFixedScores();
-	}
-
-	const CharSequence &cq = (nullptr == charSeq) ? x.m_charSeq : (*charSeq);
-
-	for (auto asciiCode : cq)
-	{
-
-		set<uchar> asciiCodes = {asciiCode, m_accTrans? asciiCode:(uchar)std::toupper(asciiCode)};
-
-		for (auto asciiCode_ : asciiCodes)
-	{
-		AnnotatedLine::scoresType scores;
-			scores.m_scoreVals = Mat::ones(1, x.m_W, CV_64F)*-1;
-
-			if (asciiCode_ != '|')
-		{
-		// Computing scores for this model over the line.
-				if (x.m_scores.find(asciiCode_) == x.m_scores.end())
-		{
-					scores.m_hs_model = m_chClassifier.learnModel(asciiCode_);
-
-					if (scores.m_hs_model.isInitialized())
-					{
-			vector<Rect> locW;
-			vector<double> scsW;
-			HogUtils::getWindows(x, scores.m_hs_model, scsW, locW, m_params.m_step, sbin, false);
-
-			// computing HOG scores.
-				double *ptr = scores.m_scoreVals.ptr<double>(0);
-			for (size_t i = 0; i < locW.size(); ++i)
-			{
-				int xInd = locW[i].x*sbin;
-				ptr[xInd] = std::max(ptr[xInd], 10*scsW[i]);
-			}
-
-				for (auto idx = 0; idx < scores.m_scoreVals.cols; ++idx)
-			{
-				ptr[idx] = ptr[idx - (idx % sbin)];
-			}
-			}
-					else
-					{
-						clog << "No model for " << asciiCode_ << ", trying to continue." << endl;
-					}
-				}
-				x.m_scores.insert({ asciiCode_, move(scores) });
-			}
-		}
-	}
-}
-
