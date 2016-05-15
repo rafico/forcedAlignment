@@ -27,7 +27,7 @@ else
 endif
 
 LDLIBS +=  -lboost_system -lboost_filesystem -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml \
--lopencv_imgcodecs -llinear -ljsgd /usr/lib64/libblas.so.3.4.2
+-lopencv_imgcodecs -llinear -ljsgd -lblas
 
 ifeq ($(ATLAS),yes)
 	CXXFLAGS += -D_USE_ATLAS_

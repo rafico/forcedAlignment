@@ -194,11 +194,11 @@ const Doc *TrainingData::getDocByName(string docName)
 
 void TrainingData::writeQueriesAndDocsGTPfiles()
 {
-	ofstream queryFile;
+	std::ofstream queryFile;
 	queryFile.open("queries.gtp");
 	for (auto &doc : m_trainingDocs)
 	{
-		ofstream gtpFile;
+		std::ofstream gtpFile;
 		path docFileName = path(doc.m_pathImage).filename();
 		string fileName = docFileName.stem().string() + ".gtp";
 		gtpFile.open(fileName);

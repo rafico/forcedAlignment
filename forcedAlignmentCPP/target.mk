@@ -15,7 +15,7 @@ endif
 
 ifndef CONFIGURATION
   CONFIGURATION = Release
-  export _ARCH
+  export CONFIGURATION
 endif
 
 OBJDIR := _$(_ARCH)_$(CONFIGURATION)
